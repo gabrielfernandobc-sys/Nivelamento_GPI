@@ -108,6 +108,10 @@
   .tab h2{margin:0 0 16px;font-size:22px;letter-spacing:-.01em}
   .tab>.card{margin-bottom:16px}
   .tab .kpis{margin-top:4px}
+  .kpi.click{cursor:pointer;transition:transform .12s,border-color .15s}
+  .kpi.click:hover{transform:translateY(-2px);border-color:var(--pri)}
+  .kpi.on{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri)}
+  .kpinote{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--pri);border-radius:12px;padding:10px 14px;margin-bottom:10px}
   @media(max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
   @media(max-width:760px){header{padding:20px 14px 60px}main{padding:0 12px 30px}.legend{margin-left:0}table{display:block;overflow-x:auto}}
 </style>
@@ -464,6 +468,11 @@ function restoreDeliv(file){ if(!file)return; const r=new FileReader();
   r.readAsText(file); }
 
 // ---------- tela ----------
+const KPIS=[['Ordens',()=>true],['Andaime pronto',o=>o.sScaf[0]==='ok'],['Andaime pendente',o=>o.sScaf[0]==='bad'||o.sScaf[0]==='warn'],
+  ['Com apoio',o=>o.sSup[0]==='warn'],['Material baixado',o=>o.sMat[0]==='ok'],['Material pendente/parcial',o=>o.sMat[0]==='bad'||o.sMat[0]==='warn'],
+  ['Aguardando entrega',o=>o.sDel[0]==='warn'],['Entrega confirmada',o=>o.sDel[0]==='ok'],['Relatório pendente',o=>!o.rel],['Replanejar',o=>o.sRep[0]==='bad'],['✅ Tudo certo',o=>o.sFim[0]==='ok']];
+let kpiSel=0;
+function pickKpi(i){ kpiSel=(i===kpiSel)?0:i; render(); if(kpiSel>0&&innerWidth<900) tableWrap.scrollIntoView({behavior:'smooth'}); }
 let sortKey='ordem',sortDir=1,expanded=new Set(),current=[];
 const pill=(s)=>`<span class="dot ${s[0]}">${s[1]}</span>`;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -483,13 +492,11 @@ function render(){
   let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!rk||o.sRisk[0]===rk)&&(!fm||o.sFim[0]===fm)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
   const val=o=>({ordem:o.ordem,desc:o.desc,semana:o.semana,disc:o.disc,scaf:o.sScaf[0],sup:o.sSup[1],mat:o.sMat[0],del:o.sDel[1],rel:o.sRel[0],rep:o.sRep[1],fim:o.sFim[0]+o.falta.length}[sortKey]);
   rows.sort((a,b)=>String(val(a)).localeCompare(String(val(b)),'pt',{numeric:true})*sortDir);
+  const base=rows, cnt=KPIS.map(([t,f])=>base.filter(f).length);
+  if(kpiSel>0) rows=base.filter(KPIS[kpiSel][1]);   // clicar num resumo filtra as ordens que estão naquela condição
   current=rows;
-  const c=(f)=>rows.filter(f).length;
-  document.getElementById('kpis').innerHTML=[
-    ['Ordens',rows.length],['Andaime pronto',c(o=>o.sScaf[0]==='ok')],['Andaime pendente',c(o=>o.sScaf[0]==='bad'||o.sScaf[0]==='warn')],
-    ['Com apoio',c(o=>o.sSup[0]==='warn')],['Material baixado',c(o=>o.sMat[0]==='ok')],['Material pendente/parcial',c(o=>o.sMat[0]==='bad'||o.sMat[0]==='warn')],
-    ['Aguardando entrega',c(o=>o.sDel[0]==='warn')],['Entrega confirmada',c(o=>o.sDel[0]==='ok')],['Relatório pendente',c(o=>!o.rel)],['Replanejar',c(o=>o.sRep[0]==='bad')],['✅ Tudo certo',c(o=>o.sFim[0]==='ok')]
-  ].map(([t,n])=>`<div class="kpi"><b>${n}</b>${t}</div>`).join('');
+  document.getElementById('kpis').innerHTML=KPIS.map(([t],i)=>`<div class="kpi click${kpiSel===i&&i>0?' on':''}" onclick="pickKpi(${i})" title="Clique para ver as ordens"><b>${cnt[i]}</b>${t}</div>`).join('');
+  const note=kpiSel>0?`<div class="kpinote"><span>Mostrando: <b>${KPIS[kpiSel][0]}</b> — ${rows.length} ordem(ns)${rows.length?': '+rows.slice(0,40).map(o=>esc(o.ordem)).join(', ')+(rows.length>40?'…':''):''}</span><button class="sec" onclick="pickKpi(0)">✖ Limpar</button></div>`:'';
   if(!all.length){ tableWrap.innerHTML='<div class="empty"><div style="font-size:40px">📂</div><b>Nenhuma ordem para mostrar</b><br>Carregue as planilhas acima ou clique em “Carregar exemplo”.</div>'; return; }
   const th=(k,t)=>`<th onclick="sortBy('${k}')">${t}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`;
   let h=`<table><tr>${th('ordem','Ordem')}${th('desc','Descrição')}${th('semana','Semana')}${th('disc','Disciplina')}${th('scaf','Andaime')}${th('sup','Apoio outra disc.')}<th>Risco nível 2</th>${th('mat','Material')}${th('del','Entrega')}${th('rel','Relatório')}${th('rep','Replan.')}${th('fim','Conclusão')}</tr>`;
@@ -520,7 +527,7 @@ function render(){
         ${o.mats.some(x=>x.baixado&&!x.deliv)?`<button class="sec" onclick="confirmAll('${o.ordem}')">✔ Confirmar entrega de todos os baixados</button>`:''}</td></tr>`;
     }
   }
-  tableWrap.innerHTML=h+'</table>';
+  tableWrap.innerHTML=note+h+'</table>'+(rows.length?'':'<div class="empty">Nenhuma ordem nessa condição.</div>');
 }
 function sortBy(k){ if(sortKey===k)sortDir*=-1; else{sortKey=k;sortDir=1;} render(); }
 function toggle(id){ expanded.has(id)?expanded.delete(id):expanded.add(id); render(); }
