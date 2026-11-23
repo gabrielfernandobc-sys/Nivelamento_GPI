@@ -76,6 +76,7 @@
   .deliv:has(input:checked){background:var(--okbg);color:var(--ok)}
   .det button{margin-top:6px}
   .kpi:nth-child(7)::before{background:var(--warn)}.kpi:nth-child(8)::before{background:var(--ok)}
+  .kpi:nth-child(9)::before{background:var(--warn)}.kpi:nth-child(10)::before{background:var(--bad)}.kpi:nth-child(11)::before{background:var(--ok)}
   .mut{color:var(--mut)}
   .empty{text-align:center;padding:50px 20px;background:var(--card);border:1px dashed var(--bd);border-radius:16px;color:var(--mut)}
   #demoBar{display:none;position:sticky;top:0;z-index:50;background:#b45309;color:#fff;padding:9px 16px;font-weight:600;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center}
@@ -121,6 +122,7 @@
     <label>Disciplina<select id="fDisc" onchange="render()"></select></label>
     <label>Andaime<select id="fScaf" onchange="render()"><option value="">todos</option><option value="ok">pronto</option><option value="warn">atenção</option><option value="bad">pendente</option><option value="na">sem andaime</option></select></label>
     <label>Risco<select id="fRisk" onchange="render()"><option value="">todos</option><option value="ok">realizada</option><option value="warn">atenção</option><option value="bad">pendente</option><option value="na">não se aplica / não avaliado</option></select></label>
+    <label>Conclusão<select id="fFim" onchange="render()"><option value="">todas</option><option value="ok">✅ tudo certo</option><option value="warn">com pendência de fechamento</option></select></label>
     <label>Material<select id="fMat" onchange="render()"><option value="">todos</option><option value="ok">baixado</option><option value="warn">parcial</option><option value="bad">pendente</option><option value="na">sem material</option></select></label>
     <label>Entrega<select id="fDel" onchange="render()"><option value="">todas</option><option value="pend">aguardando / parcial</option><option value="ok">entregue</option></select></label>
     <label class="chk"><input type="checkbox" id="fPend" onchange="render()"> só com pendência</label>
@@ -319,6 +321,16 @@ function consolidate(){
     o.auto={scaf:o.sScaf,sup:o.sSup,risk:o.sRisk,mat:o.sMat}; o.adj={};
     for(const [f,prop] of [['scaf','sScaf'],['sup','sSup'],['risk','sRisk'],['mat','sMat']]){
       const a=AJ[o.ordem+'|'+f]; if(a&&LBL[a.status]){ o.adj[f]=a; o[prop]=[a.status,'✎ '+LBL[a.status]]; } }
+    // relatório do técnico, replanejamento e conferência final (guardados como ajustes especiais ordem|rel e ordem|replan)
+    o.rel=AJ[o.ordem+'|rel']||null; o.rep=AJ[o.ordem+'|replan']||null;
+    o.sRel=o.rel?['ok','confirmado']:['warn','aguardando'];
+    o.sRep=!o.rep?['na','não avaliado']:o.rep.status==='bad'?['bad','necessário']:['ok','não necessário'];
+    const falta=[];
+    if(!o.rel) falta.push('relatório');
+    if(!o.rep) falta.push('avaliar replanejamento'); else if(o.rep.status==='bad') falta.push('replanejar');
+    if(!state.mat) falta.push('materiais não verificados'); else if(o.sMat[0]==='bad'||o.sMat[0]==='warn') falta.push('material');
+    if(o.sDel[0]==='warn') falta.push('entrega de material');
+    o.falta=falta; o.sFim=falta.length?['warn','falta '+falta.length]:['ok','✅ tudo certo'];
     o.pend=o.sScaf[0]==='bad'||o.sScaf[0]==='warn'&&(hasStatus||o.adj.scaf)||o.sMat[0]==='bad'||o.sMat[0]==='warn'||o.sDel[0]==='warn'||o.sRisk[0]==='bad'||o.sRisk[0]==='warn';
   }
   return [...orders.values()];
@@ -333,10 +345,13 @@ const LBL={ok:'ok / pronto',warn:'atenção',bad:'pendente',na:'não se aplica'}
 const FN={scaf:'Andaime',sup:'Apoio',risk:'Risco nível 2',mat:'Material'};
 let AJ={}; try{ AJ=JSON.parse(localStorage.getItem('ajustes')||'{}'); }catch(e){}
 const saveAj=()=>{ try{ localStorage.setItem('ajustes',JSON.stringify(AJ)); }catch(e){ alert('Não foi possível salvar os ajustes no navegador.'); } };
-async function saveAdj(ordem,f){
-  const st=document.getElementById(`adjS_${ordem}_${f}`).value, nota=document.getElementById(`adjN_${ordem}_${f}`).value.trim();
-  const w=who()||(DEMO?'demo':''), key=ordem+'|'+f;
-  if(st&&!w){ alert('Informe o responsável (campo "Responsável") antes de fazer um ajuste manual.'); return render(); }
+function saveAdj(ordem,f){
+  return putAj(ordem+'|'+f,document.getElementById(`adjS_${ordem}_${f}`).value,document.getElementById(`adjN_${ordem}_${f}`).value.trim()); }
+const setRel=(ordem,on)=>putAj(ordem+'|rel',on?'ok':'',(AJ[ordem+'|rel']||{}).nota||'');
+const setReplan=(ordem)=>putAj(ordem+'|replan',document.getElementById('rpS_'+ordem).value,document.getElementById('rpN_'+ordem).value.trim());
+async function putAj(key,st,nota){
+  const w=who()||(DEMO?'demo':'');
+  if(st&&!w){ alert('Informe o responsável (campo "Responsável") antes de confirmar ou ajustar.'); return render(); }
   if(SERVER&&!DEMO){
     try{ if(st) await api('POST','/api/ajuste',{key,status:st,nota,quem:w}); else await api('POST','/api/ajuste/remove',{key,quem:w}); await sync(true); }
     catch(e){ alert('Falha ao salvar no servidor: '+e.message); render(); }
@@ -427,28 +442,37 @@ function render(){
   else if(state.gpi) all=all.filter(o=>o.inGpi);
   fillSelect('fWeek',[...new Set(all.map(o=>o.semana).filter(Boolean))].sort());
   fillSelect('fDisc',[...new Set(all.map(o=>o.disc).filter(Boolean))].sort());
-  const q=norm(document.getElementById('fSearch').value), w=fWeek.value, d=fDisc.value, sc=fScaf.value, mt=fMat.value, rk=fRisk.value, dv=fDel.value, pe=fPend.checked;
-  let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!rk||o.sRisk[0]===rk)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
-  const val=o=>({ordem:o.ordem,desc:o.desc,semana:o.semana,disc:o.disc,scaf:o.sScaf[0],sup:o.sSup[1],mat:o.sMat[0],del:o.sDel[1]}[sortKey]);
+  const q=norm(document.getElementById('fSearch').value), w=fWeek.value, d=fDisc.value, sc=fScaf.value, mt=fMat.value, rk=fRisk.value, fm=fFim.value, dv=fDel.value, pe=fPend.checked;
+  let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!rk||o.sRisk[0]===rk)&&(!fm||o.sFim[0]===fm)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
+  const val=o=>({ordem:o.ordem,desc:o.desc,semana:o.semana,disc:o.disc,scaf:o.sScaf[0],sup:o.sSup[1],mat:o.sMat[0],del:o.sDel[1],rel:o.sRel[0],rep:o.sRep[1],fim:o.sFim[0]+o.falta.length}[sortKey]);
   rows.sort((a,b)=>String(val(a)).localeCompare(String(val(b)),'pt',{numeric:true})*sortDir);
   current=rows;
   const c=(f)=>rows.filter(f).length;
   document.getElementById('kpis').innerHTML=[
     ['Ordens',rows.length],['Andaime pronto',c(o=>o.sScaf[0]==='ok')],['Andaime pendente',c(o=>o.sScaf[0]==='bad'||o.sScaf[0]==='warn')],
     ['Com apoio',c(o=>o.sSup[0]==='warn')],['Material baixado',c(o=>o.sMat[0]==='ok')],['Material pendente/parcial',c(o=>o.sMat[0]==='bad'||o.sMat[0]==='warn')],
-    ['Aguardando entrega',c(o=>o.sDel[0]==='warn')],['Entrega confirmada',c(o=>o.sDel[0]==='ok')]
+    ['Aguardando entrega',c(o=>o.sDel[0]==='warn')],['Entrega confirmada',c(o=>o.sDel[0]==='ok')],['Relatório pendente',c(o=>!o.rel)],['Replanejar',c(o=>o.sRep[0]==='bad')],['✅ Tudo certo',c(o=>o.sFim[0]==='ok')]
   ].map(([t,n])=>`<div class="kpi"><b>${n}</b>${t}</div>`).join('');
   if(!all.length){ tableWrap.innerHTML='<div class="empty"><div style="font-size:40px">📂</div><b>Nenhuma ordem para mostrar</b><br>Carregue as planilhas acima ou clique em “Carregar exemplo”.</div>'; return; }
   const th=(k,t)=>`<th onclick="sortBy('${k}')">${t}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`;
-  let h=`<table><tr>${th('ordem','Ordem')}${th('desc','Descrição')}${th('semana','Semana')}${th('disc','Disciplina')}${th('scaf','Andaime')}${th('sup','Apoio outra disc.')}<th>Risco nível 2</th>${th('mat','Material')}${th('del','Entrega')}</tr>`;
+  let h=`<table><tr>${th('ordem','Ordem')}${th('desc','Descrição')}${th('semana','Semana')}${th('disc','Disciplina')}${th('scaf','Andaime')}${th('sup','Apoio outra disc.')}<th>Risco nível 2</th>${th('mat','Material')}${th('del','Entrega')}${th('rel','Relatório')}${th('rep','Replan.')}${th('fim','Conclusão')}</tr>`;
   for(const o of rows){
-    h+=`<tr class="row" onclick="toggle('${o.ordem}')"><td>${esc(o.ordem)}</td><td>${esc(o.desc)}</td><td>${esc(o.semana)}</td><td>${esc(o.disc)}</td><td>${pill(o.sScaf)}</td><td>${pill(o.sSup)}</td><td>${pill(o.sRisk)}</td><td>${pill(o.sMat)}</td><td>${pill(o.sDel)}</td></tr>`;
+    h+=`<tr class="row" onclick="toggle('${o.ordem}')"><td>${esc(o.ordem)}</td><td>${esc(o.desc)}</td><td>${esc(o.semana)}</td><td>${esc(o.disc)}</td><td>${pill(o.sScaf)}</td><td>${pill(o.sSup)}</td><td>${pill(o.sRisk)}</td><td>${pill(o.sMat)}</td><td>${pill(o.sDel)}</td><td>${pill(o.sRel)}</td><td>${pill(o.sRep)}</td><td>${pill(o.sFim)}</td></tr>`;
     if(expanded.has(o.ordem)){
       const li=a=>a.length?'<ul>'+a.join('')+'</ul>':'<div class="mut">—</div>';
-      h+=`<tr class="det"><td colspan="9"><b>Andaime</b>${li(o.scaf.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
+      h+=`<tr class="det"><td colspan="12"><b>Andaime</b>${li(o.scaf.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
         <b>Apoio de outras disciplinas</b>${li(o.support.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
         <b>Materiais</b>${li(o.mats.map(x=>`<li>${esc(x.mat)} ${esc(x.desc)} — ${x.noQty?(x.bx?'baixado':'<b style="color:var(--bad)">pendente</b>')+(x.st?' ('+esc(x.st)+')':''):`reservado ${x.res}, baixado ${x.bx} ${x.res>0&&x.bx<x.res?'<b style="color:var(--bad)">(falta '+(x.res-x.bx)+')</b>':''}`}
           ${x.baixado?`<label class="deliv"><input type="checkbox" ${x.deliv?'checked':''} onchange="confirmDeliv('${x.key}',this.checked)"> entregue${x.deliv?' — '+esc(x.deliv.quem)+', '+esc(x.deliv.ts):''}</label>`:''}</li>`))}
+        <b>Fechamento da ordem</b>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:4px 0">
+          <label class="deliv"><input type="checkbox" ${o.rel?'checked':''} onchange="setRel('${o.ordem}',this.checked)"> relatório do técnico concluído${o.rel?' — '+esc(o.rel.quem)+', '+esc(o.rel.ts):''}</label>
+          <span>Replanejamento:
+            <select id="rpS_${o.ordem}" onchange="setReplan('${o.ordem}')"><option value="">não avaliado</option><option value="ok" ${o.rep&&o.rep.status==='ok'?'selected':''}>não necessário</option><option value="bad" ${o.rep&&o.rep.status==='bad'?'selected':''}>necessário</option></select>
+            <input type="text" id="rpN_${o.ordem}" value="${o.rep?esc(o.rep.nota||''):''}" placeholder="motivo do replanejamento" size="34" onchange="if(document.getElementById('rpS_${o.ordem}').value)setReplan('${o.ordem}')">
+            ${o.rep?'<span class="mut">'+esc(o.rep.quem)+', '+esc(o.rep.ts)+'</span>':''}</span>
+          ${o.falta.length?'<span class="mut">Para fechar falta: '+esc(o.falta.join(', '))+'</span>':'<span class="dot ok">✅ ordem 100% — sem replanejamento, materiais entregues e relatório pronto</span>'}
+        </div>
         <b>Risco nível 2 (planilha do nivelamento)</b><div>${o.riscoTxt?esc(o.riscoTxt):'<span class="mut">— (vazio ou coluna não mapeada)</span>'}</div>
         <b>Ajustes manuais</b><div class="mut" style="margin-bottom:4px">Corrija o status quando o cálculo automático não refletir a realidade. Exige “Responsável” (passo 4). Escolha “automático” para desfazer.</div>
         ${['scaf','sup','risk','mat'].map(f=>{ const a=o.adj[f]; const id=o.ordem+'_'+f;
@@ -465,7 +489,7 @@ function sortBy(k){ if(sortKey===k)sortDir*=-1; else{sortKey=k;sortDir=1;} rende
 function toggle(id){ expanded.has(id)?expanded.delete(id):expanded.add(id); render(); }
 
 function exportXlsx(){
-  const data=current.map(o=>({Ordem:o.ordem,Descrição:o.desc,Semana:o.semana,Disciplina:o.disc,Andaime:o.sScaf[1],Apoio:o.sSup[1],'Risco nível 2':o.sRisk[1],'Risco (planilha)':o.riscoTxt,Material:o.sMat[1],Entrega:o.sDel[1],
+  const data=current.map(o=>({Ordem:o.ordem,Descrição:o.desc,Semana:o.semana,Disciplina:o.disc,Andaime:o.sScaf[1],Apoio:o.sSup[1],'Risco nível 2':o.sRisk[1],'Risco (planilha)':o.riscoTxt,Material:o.sMat[1],Entrega:o.sDel[1],Relatório:o.sRel[1],Replanejamento:o.sRep[1],'Motivo replan.':o.rep?o.rep.nota:'',Conclusão:o.falta.length?'falta: '+o.falta.join(', '):'tudo certo',
     'Materiais pendentes':o.mats.filter(x=>x.res>x.bx).map(x=>x.noQty?`${x.mat} (pendente)`:`${x.mat} (falta ${x.res-x.bx})`).join('; ')}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),'Resumo');
   const ent=[]; current.forEach(o=>o.mats.filter(x=>x.deliv).forEach(x=>ent.push({Ordem:o.ordem,Material:x.mat,Descrição:x.desc,'Entregue em':x.deliv.ts,Responsável:x.deliv.quem})));
