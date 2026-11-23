@@ -1,0 +1,5 @@
+# Planilhas exportadas do SAP (dados internos da empresa)
+*.xlsx
+*.xls
+*.csv
+!lib/*
