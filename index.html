@@ -5,71 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel de Ordens SAP</title>
 <style>
-  :root{--bg:#f5f6f8;--card:#fff;--tx:#1d2330;--mut:#6b7385;--bd:#dde1e8;--ok:#1f9d55;--warn:#d98e04;--bad:#d64545;--na:#9aa1b0;--pri:#1f5fbf}
-  @media (prefers-color-scheme:dark){:root{--bg:#14171e;--card:#1c212b;--tx:#e6e9ef;--mut:#98a0b3;--bd:#2c3340;--pri:#6aa3ff}}
-  *{box-sizing:border-box}body{margin:0;font:14px/1.4 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--tx)}
-  header{padding:14px 20px;border-bottom:1px solid var(--bd);background:var(--card)}
-  h1{margin:0;font-size:18px}h2{font-size:14px;margin:0 0 8px}
-  main{padding:16px 20px;max-width:1500px;margin:auto}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-  .slot small{color:var(--mut);display:block;margin-bottom:6px}
-  .map{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;margin-top:8px;font-size:12px;align-items:center}
-  select,input[type=text],textarea{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:5px;padding:5px;font:inherit;max-width:100%}
-  textarea{width:100%;height:60px}
-  button{background:var(--pri);color:#fff;border:0;border-radius:5px;padding:7px 12px;font:inherit;cursor:pointer}
-  button.sec{background:transparent;color:var(--pri);border:1px solid var(--pri)}
-  .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
-  .filters label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
-  .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-  .kpi{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 14px;min-width:120px}
-  .kpi b{font-size:20px;display:block}
-  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
-  th,td{padding:7px 9px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
-  th{font-size:12px;color:var(--mut);cursor:pointer;white-space:nowrap}
-  tr.row{cursor:pointer}tr.row:hover{background:color-mix(in srgb,var(--pri) 8%,transparent)}
-  .dot{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;color:#fff;white-space:nowrap}
-  .ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}.na{background:var(--na)}
-  .det{background:var(--bg);font-size:13px}.det td{padding:10px 16px}
-  .det ul{margin:2px 0 8px;padding-left:18px}
+  :root{
+    --bg:#f3f5fa;--card:#ffffff;--card2:#f8f9fd;--tx:#172036;--mut:#6a7490;--bd:#e3e7f1;
+    --ok:#12a150;--warn:#e08a00;--bad:#e5484d;--na:#8b93a8;--pri:#4f46e5;--pri2:#7c3aed;
+    --okbg:#e3f6ec;--warnbg:#fff1d9;--badbg:#fde8e9;--nabg:#eceef4;
+    --sh:0 1px 2px rgba(23,32,54,.05),0 8px 24px rgba(23,32,54,.06);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0e1220;--card:#171c2e;--card2:#1c2236;--tx:#e9ecf6;--mut:#98a2c0;--bd:#262d45;
+    --pri:#818cf8;--pri2:#a78bfa;--okbg:#10321f;--warnbg:#3a2a0a;--badbg:#3c1519;--nabg:#232a40;
+    --ok:#3ddc84;--warn:#fbbf24;--bad:#ff6b70;--na:#a3acc8;--sh:0 8px 24px rgba(0,0,0,.35);}}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 Inter,system-ui,"Segoe UI",sans-serif;background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+  header{background:linear-gradient(120deg,#312e81 0%,#4f46e5 55%,#7c3aed 100%);color:#fff;padding:26px 24px 70px}
+  .hwrap{max-width:1500px;margin:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo{width:46px;height:46px;border-radius:13px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:24px}
+  h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+  .sub{opacity:.8;font-size:13px;margin-top:2px}
+  .legend{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .legend span{background:rgba(255,255,255,.15);padding:4px 10px;border-radius:99px;font-size:12px}
+  main{padding:0 24px 40px;max-width:1500px;margin:-48px auto 0}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:16px;box-shadow:var(--sh);margin-bottom:16px}
+  details.card>summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+  details.card>summary::-webkit-details-marker{display:none}
+  details.card>summary::after{content:"▾";margin-left:auto;color:var(--mut);transition:transform .2s}
+  details.card:not([open])>summary::after{transform:rotate(-90deg)}
+  .step{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700}
+  .body{padding:2px 18px 18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .slot{background:var(--card2);border:1.5px dashed var(--bd);border-radius:14px;padding:14px;margin:0!important;box-shadow:none;transition:border-color .2s}
+  .slot:hover{border-color:var(--pri)}
+  .slot b{font-size:14px}
+  .slot small{color:var(--mut);display:block;margin:2px 0 10px}
+  .map{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;margin-top:10px;font-size:12px;align-items:center;color:var(--mut)}
+  select,input[type=text],textarea{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;font:inherit;max-width:100%;transition:border-color .15s,box-shadow .15s}
+  select:focus,input:focus,textarea:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px color-mix(in srgb,var(--pri) 20%,transparent)}
+  input[type=file]{width:100%;font-size:12px;color:var(--mut)}
+  input[type=file]::file-selector-button{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border:0;border-radius:8px;padding:7px 12px;margin-right:10px;cursor:pointer;font:inherit;font-weight:600}
+  textarea{width:100%;height:70px;resize:vertical}
+  button{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border:0;border-radius:10px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer;box-shadow:0 4px 12px color-mix(in srgb,var(--pri) 35%,transparent);transition:transform .1s,filter .15s}
+  button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}
+  button.sec{background:transparent;color:var(--pri);border:1px solid var(--pri);box-shadow:none}
+  .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+  .filters label{display:flex;flex-direction:column;font-size:12px;font-weight:500;color:var(--mut);gap:4px}
+  .chk{flex-direction:row!important;align-items:center;gap:8px!important;background:var(--card2);padding:9px 12px;border-radius:10px;border:1px solid var(--bd);color:var(--tx)!important}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px 16px;box-shadow:var(--sh);position:relative;overflow:hidden;color:var(--mut);font-size:12px;font-weight:500}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--na)}
+  .kpi:nth-child(1)::before{background:linear-gradient(var(--pri),var(--pri2))}
+  .kpi:nth-child(2)::before,.kpi:nth-child(5)::before{background:var(--ok)}
+  .kpi:nth-child(3)::before,.kpi:nth-child(6)::before{background:var(--bad)}
+  .kpi:nth-child(4)::before{background:var(--warn)}
+  .kpi b{font-size:28px;font-weight:700;display:block;color:var(--tx);letter-spacing:-.02em;line-height:1.15}
+  table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;box-shadow:var(--sh)}
+  th,td{padding:12px 14px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);cursor:pointer;white-space:nowrap;background:var(--card2);user-select:none}
+  th:hover{color:var(--pri)}
+  tr.row{cursor:pointer;transition:background .12s}
+  tr.row:hover{background:color-mix(in srgb,var(--pri) 7%,transparent)}
+  tr.row td:first-child{font-weight:700;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+  .dot{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+  .dot::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .dot.ok{background:var(--okbg);color:var(--ok)}.dot.warn{background:var(--warnbg);color:var(--warn)}
+  .dot.bad{background:var(--badbg);color:var(--bad)}.dot.na{background:var(--nabg);color:var(--na)}
+  .det td{background:var(--card2);font-size:13px;padding:14px 22px}
+  .det b{display:block;margin-top:6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--pri)}
+  .det ul{margin:4px 0 8px;padding-left:18px}
   .mut{color:var(--mut)}
-  @media(max-width:700px){main{padding:10px}}
+  .empty{text-align:center;padding:50px 20px;background:var(--card);border:1px dashed var(--bd);border-radius:16px;color:var(--mut)}
+  @media(max-width:760px){header{padding:20px 14px 60px}main{padding:0 12px 30px}.legend{margin-left:0}table{display:block;overflow-x:auto}}
 </style>
 </head>
 <body>
-<header><h1>Painel de Ordens SAP — andaime, apoio, risco e material</h1></header>
+<header><div class="hwrap">
+  <div class="logo">📋</div>
+  <div><h1>Painel de Ordens SAP</h1><div class="sub">Nivelamento semanal — andaime, apoio, risco e material em um só lugar</div></div>
+  <div class="legend"><span>🟢 pronto</span><span>🟡 atenção</span><span>🔴 pendente</span><span>⚪ não se aplica</span></div>
+</div></header>
 <main>
 
-<div class="card">
-  <h2>1. Carregar planilhas</h2>
-  <div class="grid" id="slots"></div>
-  <p class="mut" style="margin:10px 0 0">Os arquivos são lidos só no seu navegador (nada é enviado para internet). As colunas são reconhecidas automaticamente; corrija nos seletores se necessário — a escolha fica salva.</p>
-  <p style="margin:10px 0 0"><button class="sec" onclick="loadDemo()">Carregar exemplo</button></p>
-</div>
-
-<div class="card">
-  <h2>2. Regras</h2>
-  <div class="filters">
-    <label>Texto que identifica a operação de andaime<input type="text" id="kwScaf" value="andaime"></label>
-    <label>Status que significa "andaime pronto" (separe por vírgula)<input type="text" id="kwDone" value="CNF, ENCE, ENC, CONF, CTEC, TECO, FINAL" size="38"></label>
-    <label>Apoio: considerar disciplina = <select id="discMode"><option value="wc4">primeiras 4 letras do centro de trabalho</option><option value="wc">centro de trabalho inteiro</option><option value="wc3">primeiras 3 letras</option><option value="wc2">primeiras 2 letras</option></select></label>
-    <button onclick="render()">Aplicar</button>
+<details class="card" open>
+  <summary><span class="step">1</span>Carregar planilhas</summary>
+  <div class="body">
+    <div class="grid" id="slots"></div>
+    <p class="mut" style="margin:12px 0">🔒 Os arquivos são lidos só no seu navegador. As colunas são reconhecidas automaticamente; corrija nos seletores se precisar — a escolha fica salva.</p>
+    <button class="sec" onclick="loadDemo()">Carregar exemplo</button>
   </div>
-</div>
+</details>
 
-<div class="card">
-  <h2>3. Filtros</h2>
-  <div class="filters">
+<details class="card">
+  <summary><span class="step">2</span>Regras de análise</summary>
+  <div class="body"><div class="filters">
+    <label>Texto que identifica a operação de andaime<input type="text" id="kwScaf" value="andaime"></label>
+    <label>Status de "andaime pronto" (separe por vírgula)<input type="text" id="kwDone" value="CNF, ENCE, ENC, CONF, CTEC, TECO, FINAL" size="38"></label>
+    <label>Disciplina de apoio por<select id="discMode"><option value="wc4">4 primeiras letras do centro de trabalho</option><option value="wc">centro de trabalho inteiro</option><option value="wc3">3 primeiras letras</option><option value="wc2">2 primeiras letras</option></select></label>
+    <button onclick="render()">Aplicar</button>
+  </div></div>
+</details>
+
+<details class="card" open>
+  <summary><span class="step">3</span>Filtros</summary>
+  <div class="body"><div class="filters">
     <label>Buscar<input type="text" id="fSearch" placeholder="ordem ou descrição" oninput="render()"></label>
     <label>Semana<select id="fWeek" onchange="render()"></select></label>
     <label>Disciplina<select id="fDisc" onchange="render()"></select></label>
     <label>Andaime<select id="fScaf" onchange="render()"><option value="">todos</option><option value="ok">pronto</option><option value="warn">atenção</option><option value="bad">pendente</option><option value="na">sem andaime</option></select></label>
     <label>Material<select id="fMat" onchange="render()"><option value="">todos</option><option value="ok">baixado</option><option value="warn">parcial</option><option value="bad">pendente</option><option value="na">sem material</option></select></label>
-    <label><span><input type="checkbox" id="fPend" onchange="render()"> só com pendência</span></label>
-    <label style="flex:1;min-width:240px">Minha relação de ordens (colar, uma por linha)<textarea id="fList" oninput="render()"></textarea></label>
-    <button onclick="exportXlsx()">Exportar Excel</button>
-  </div>
-</div>
+    <label class="chk"><input type="checkbox" id="fPend" onchange="render()"> só com pendência</label>
+    <label style="flex:1;min-width:240px">Minha relação de ordens (uma por linha)<textarea id="fList" oninput="render()"></textarea></label>
+    <button onclick="exportXlsx()">⬇ Exportar Excel</button>
+  </div></div>
+</details>
 
 <div class="kpis" id="kpis"></div>
 <div id="tableWrap"></div>
@@ -227,7 +274,7 @@ function render(){
     ['Ordens',rows.length],['Andaime pronto',c(o=>o.sScaf[0]==='ok')],['Andaime pendente',c(o=>o.sScaf[0]==='bad'||o.sScaf[0]==='warn')],
     ['Com apoio',c(o=>o.support.length)],['Material baixado',c(o=>o.sMat[0]==='ok')],['Material pendente/parcial',c(o=>o.sMat[0]==='bad'||o.sMat[0]==='warn')]
   ].map(([t,n])=>`<div class="kpi"><b>${n}</b>${t}</div>`).join('');
-  if(!all.length){ tableWrap.innerHTML='<p class="mut">Carregue as planilhas acima para ver o painel.</p>'; return; }
+  if(!all.length){ tableWrap.innerHTML='<div class="empty"><div style="font-size:40px">📂</div><b>Nenhuma ordem para mostrar</b><br>Carregue as planilhas acima ou clique em “Carregar exemplo”.</div>'; return; }
   const th=(k,t)=>`<th onclick="sortBy('${k}')">${t}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`;
   let h=`<table><tr>${th('ordem','Ordem')}${th('desc','Descrição')}${th('semana','Semana')}${th('disc','Disciplina')}${th('scaf','Andaime')}${th('sup','Apoio outra disc.')}<th>Risco nível 2</th>${th('mat','Material')}</tr>`;
   for(const o of rows){
