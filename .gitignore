@@ -3,3 +3,7 @@
 *.xls
 *.csv
 !lib/*
+
+# Banco do servidor (contém dados do SAP)
+dados/
+__pycache__/

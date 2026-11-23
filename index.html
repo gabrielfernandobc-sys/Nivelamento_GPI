@@ -85,7 +85,7 @@
 <header><div class="hwrap">
   <div class="logo">📋</div>
   <div><h1>Painel de Ordens SAP</h1><div class="sub">Nivelamento semanal — andaime, apoio, risco e material em um só lugar</div></div>
-  <div class="legend"><span>🟢 pronto</span><span>🟡 atenção</span><span>🔴 pendente</span><span>⚪ não se aplica</span></div>
+  <div class="legend"><span>🟢 pronto</span><span>🟡 atenção</span><span>🔴 pendente</span><span>⚪ não se aplica</span><span id="srv"></span></div>
 </div></header>
 <main>
 
@@ -93,8 +93,8 @@
   <summary><span class="step">1</span>Carregar planilhas</summary>
   <div class="body">
     <div class="grid" id="slots"></div>
-    <p class="mut" style="margin:12px 0">🔒 Os arquivos são lidos só no seu navegador. As colunas são reconhecidas automaticamente; corrija nos seletores se precisar — a escolha fica salva.</p>
-    <button class="sec" onclick="loadDemo()">Carregar exemplo</button>
+    <p class="mut" style="margin:12px 0" id="privNote">🔒 Os arquivos são lidos só no seu navegador. As colunas são reconhecidas automaticamente; corrija nos seletores se precisar — a escolha fica salva.</p>
+    <button class="sec" id="btnDemo" onclick="loadDemo()">Carregar exemplo</button>
   </div>
 </details>
 
@@ -130,7 +130,7 @@
     <button class="sec" onclick="backupDeliv()">Backup das entregas</button>
     <label class="filebtn">Restaurar backup<input type="file" accept=".json" onchange="restoreDeliv(this.files[0])"></label>
   </div>
-  <p class="mut" style="margin:12px 0 0">Para materiais já baixados: abra a ordem (clique na linha) e marque “entregue” no momento da entrega real. Fica salvo neste navegador, com data/hora e responsável. Se trocar de computador ou limpar o navegador, use o backup.</p></div>
+  <p class="mut" style="margin:12px 0 0" id="delivNote">Para materiais já baixados: abra a ordem (clique na linha) e marque “entregue” no momento da entrega real. Fica salvo neste navegador, com data/hora e responsável. Se trocar de computador ou limpar o navegador, use o backup.</p></div>
 </details>
 
 <div class="kpis" id="kpis"></div>
@@ -199,8 +199,36 @@ function readFile(k,file){
   r.onload=e=>{ const wb=XLSX.read(e.target.result,{type:'array'});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
-    setData(k,rows,file.name); };
+    setData(k,rows,file.name); if(SERVER) upload(k,rows,file.name); };
   r.readAsArrayBuffer(file);
+}
+
+// ---------- modo servidor (painel compartilhado) ----------
+// Se a página foi aberta pelo servidor (http://...), os dados ficam no servidor e todos veem o mesmo painel.
+// Se foi aberta direto do arquivo (file://), funciona em modo local, como antes.
+const SERVER = location.protocol.startsWith('http');
+let REV=-1, PIN=''; try{ PIN=localStorage.getItem('pin')||''; }catch(e){}
+async function api(method,path,body){
+  const r=await fetch(path,{method,headers:{'Content-Type':'application/json','X-PIN':PIN},body:body?JSON.stringify(body):undefined});
+  if(r.status===401){ const p=prompt('PIN de acesso ao painel:'); if(p===null) throw new Error('sem acesso');
+    PIN=p; try{localStorage.setItem('pin',p)}catch(e){} return api(method,path,body); }
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+function setStatus(ok){ const el=document.getElementById('srv'); if(!el)return;
+  el.textContent=!SERVER?'💾 modo local (sem servidor)':ok?'🟢 conectado ao servidor':'🔴 sem conexão com o servidor'; }
+async function upload(k,rows,name){
+  try{ const r=await api('PUT','/api/dataset/'+k,{name,quem:who(),rows}); REV=r.rev; setStatus(true); }
+  catch(e){ setStatus(false); alert('Falha ao enviar a planilha ao servidor: '+e.message); }
+}
+async function sync(force){
+  try{
+    const {rev}=await api('GET','/api/rev'); if(!force&&rev===REV){ setStatus(true); return; }
+    const s=await api('GET','/api/state'); REV=s.rev; DELIV=s.deliv||{};
+    for(const k of Object.keys(SLOTS)){ const d=s.datasets[k];
+      if(d) setData(k,d.rows,`${d.name} — enviado por ${d.quem||'?'} em ${d.ts}`); }
+    render(); setStatus(true);
+  }catch(e){ setStatus(false); }
 }
 function setData(k,rows,name){
   const headers=rows.length?Object.keys(rows[0]):[];
@@ -280,15 +308,23 @@ let DELIV={}; try{ DELIV=JSON.parse(localStorage.getItem('deliv')||'{}'); }catch
 const saveDeliv=()=>{ try{ localStorage.setItem('deliv',JSON.stringify(DELIV)); }catch(e){ alert('Não foi possível salvar no navegador. Use o backup das entregas.'); } };
 const who=()=>{ const v=document.getElementById('fWho').value.trim(); try{localStorage.setItem('who',v)}catch(e){} return v; };
 const nowStr=()=>new Date().toLocaleString('pt-BR');
-function confirmDeliv(key,on){
-  if(on){ const w=who(); if(!w){ alert('Informe o responsável pela confirmação (campo "Responsável") antes de confirmar.'); return render(); }
-    DELIV[key]={ts:nowStr(),quem:w}; } else delete DELIV[key];
+async function confirmDeliv(key,on){
+  const w=who();
+  if(on&&!w){ alert('Informe o responsável pela confirmação (campo "Responsável") antes de confirmar.'); return render(); }
+  if(SERVER){
+    try{ if(on) await api('POST','/api/deliv',{keys:[key],quem:w}); else await api('POST','/api/deliv/remove',{key,quem:w}); await sync(true); }
+    catch(e){ alert('Falha ao salvar no servidor: '+e.message); render(); }
+    return;
+  }
+  if(on) DELIV[key]={ts:nowStr(),quem:w}; else delete DELIV[key];
   saveDeliv(); render();
 }
-function confirmAll(ordem){
+async function confirmAll(ordem){
   const w=who(); if(!w){ alert('Informe o responsável pela confirmação (campo "Responsável") antes de confirmar.'); return; }
   const o=current.find(x=>x.ordem===ordem); if(!o)return;
-  o.mats.filter(x=>x.baixado&&!x.deliv).forEach(x=>{ DELIV[x.key]={ts:nowStr(),quem:w}; }); saveDeliv(); render();
+  const keys=o.mats.filter(x=>x.baixado&&!x.deliv).map(x=>x.key);
+  if(SERVER){ try{ await api('POST','/api/deliv',{keys,quem:w}); await sync(true); }catch(e){ alert('Falha ao salvar no servidor: '+e.message); } return; }
+  keys.forEach(k=>{ DELIV[k]={ts:nowStr(),quem:w}; }); saveDeliv(); render();
 }
 function backupDeliv(){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(DELIV,null,1)],{type:'application/json'}));
@@ -370,7 +406,13 @@ function loadDemo(){
 }
 
 try{ fWho.value=localStorage.getItem('who')||''; }catch(e){}
-buildSlots(); render();
+buildSlots(); render(); setStatus(false);
+if(SERVER){
+  document.getElementById('btnDemo').style.display='none';
+  document.getElementById('privNote').innerHTML='🌐 Ao carregar uma planilha, ela é guardada no servidor e <b>todos</b> passam a ver o mesmo painel (a última enviada vale). As colunas são reconhecidas automaticamente; corrija nos seletores se precisar.';
+  document.getElementById('delivNote').innerHTML='Para materiais já baixados: abra a ordem (clique na linha) e marque “entregue” no momento da entrega real. Fica salvo no <b>servidor</b>, com data/hora e responsável, e todos veem na hora. O backup é opcional.';
+  sync(true); setInterval(()=>sync(false),10000);
+}
 </script>
 </body>
 </html>
