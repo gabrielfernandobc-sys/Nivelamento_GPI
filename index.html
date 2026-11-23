@@ -78,10 +78,15 @@
   .kpi:nth-child(7)::before{background:var(--warn)}.kpi:nth-child(8)::before{background:var(--ok)}
   .mut{color:var(--mut)}
   .empty{text-align:center;padding:50px 20px;background:var(--card);border:1px dashed var(--bd);border-radius:16px;color:var(--mut)}
+  #demoBar{display:none;position:sticky;top:0;z-index:50;background:#b45309;color:#fff;padding:9px 16px;font-weight:600;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center}
+  #demoBar button{background:#fff;color:#b45309;box-shadow:none;padding:5px 12px}
+  .adj{display:grid;grid-template-columns:110px auto 150px minmax(180px,1fr) auto;gap:8px;align-items:center;margin:4px 0;font-size:12px}
+  .adj select,.adj input{padding:5px 8px;font-size:12px}
   @media(max-width:760px){header{padding:20px 14px 60px}main{padding:0 12px 30px}.legend{margin-left:0}table{display:block;overflow-x:auto}}
 </style>
 </head>
 <body>
+<div id="demoBar">🧪 MODO DEMONSTRAÇÃO — dados fictícios; nada é enviado ao servidor nem salvo. <button onclick="exitDemo()">✖ Sair do modo demo</button></div>
 <header><div class="hwrap">
   <div class="logo">📋</div>
   <div><h1>Painel de Ordens SAP</h1><div class="sub">Nivelamento semanal — andaime, apoio, risco e material em um só lugar</div></div>
@@ -115,6 +120,7 @@
     <label>Semana<select id="fWeek" onchange="render()"></select></label>
     <label>Disciplina<select id="fDisc" onchange="render()"></select></label>
     <label>Andaime<select id="fScaf" onchange="render()"><option value="">todos</option><option value="ok">pronto</option><option value="warn">atenção</option><option value="bad">pendente</option><option value="na">sem andaime</option></select></label>
+    <label>Risco<select id="fRisk" onchange="render()"><option value="">todos</option><option value="ok">realizada</option><option value="warn">atenção</option><option value="bad">pendente</option><option value="na">não se aplica / não avaliado</option></select></label>
     <label>Material<select id="fMat" onchange="render()"><option value="">todos</option><option value="ok">baixado</option><option value="warn">parcial</option><option value="bad">pendente</option><option value="na">sem material</option></select></label>
     <label>Entrega<select id="fDel" onchange="render()"><option value="">todas</option><option value="pend">aguardando / parcial</option><option value="ok">entregue</option></select></label>
     <label class="chk"><input type="checkbox" id="fPend" onchange="render()"> só com pendência</label>
@@ -146,7 +152,8 @@ const SLOTS = {
             tarefa:['tarefa','task','atividade'],
             semana:['semana','week','sem'],
             descricao:['descricao','descrição','texto breve','texto','description'],
-            disciplina:['disciplina','especialidade','area','área','centro trab','centro de trabalho']}},
+            disciplina:['disciplina','especialidade','area','área','centro trab','centro de trabalho'],
+            risco:['risco nivel 2','risco nível 2','analise de risco','análise de risco','analise risco','risco']}},
   ops:{title:'Operações das ordens (IW37N / IW49N)',hint:'Uma linha por operação',
     fields:{ordem:['ordem','order','nº ordem','n° ordem'],
             operacao:['operacao','operação','oper','op.','atividade'],
@@ -165,6 +172,15 @@ const SLOTS = {
 const REQ = {gpi:['ordem'],ops:['ordem'],mat:['ordem']};
 // Planilha de controle interna sem quantidades: usa a coluna "statusMat" (ex.: SIM/NÃO, Baixado, Pendente)
 const MAT_DONE=/^(sim|s|ok|x|baixad|retirad|entregue|atendid|separad|disponivel|disponível|conclu|feito|1|true)/i;
+const RISK_NA=/^(n[aã]o se aplica|n\/?a$|dispensad|n[aã]o requer|isento)/i;
+const RISK_BAD=/^(n[aã]o|pend|aberta|falta|a fazer|a realizar)/i;
+const RISK_OK=/^(sim|s$|ok|x$|realizad|conclu|feit|aprovad|liberad|1$|true)/i;
+function riskStatus(v){ const t=String(v==null?'':v).trim();
+  if(!t) return ['warn','não preenchido'];
+  if(RISK_NA.test(t)) return ['na','não se aplica'];
+  if(RISK_BAD.test(t)) return ['bad','pendente'];
+  if(RISK_OK.test(t)) return ['ok','realizada'];
+  return ['warn',t.length>28?t.slice(0,27)+'…':t]; }
 const state = {gpi:null,ops:null,mat:null};   // {headers, rows, map}
 
 const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -199,6 +215,7 @@ function readFile(k,file){
   r.onload=e=>{ const wb=XLSX.read(e.target.result,{type:'array'});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
+    if(DEMO) exitDemo(false);   // carregar planilha real encerra o modo demo
     setData(k,rows,file.name); if(SERVER) upload(k,rows,file.name); };
   r.readAsArrayBuffer(file);
 }
@@ -216,15 +233,16 @@ async function api(method,path,body){
   return r.json();
 }
 function setStatus(ok){ const el=document.getElementById('srv'); if(!el)return;
-  el.textContent=!SERVER?'💾 modo local (sem servidor)':ok?'🟢 conectado ao servidor':'🔴 sem conexão com o servidor'; }
+  el.textContent=DEMO?'🧪 modo demonstração':!SERVER?'💾 modo local (sem servidor)':ok?'🟢 conectado ao servidor':'🔴 sem conexão com o servidor'; }
 async function upload(k,rows,name){
   try{ const r=await api('PUT','/api/dataset/'+k,{name,quem:who(),rows}); REV=r.rev; setStatus(true); }
   catch(e){ setStatus(false); alert('Falha ao enviar a planilha ao servidor: '+e.message); }
 }
 async function sync(force){
+  if(DEMO) return;
   try{
     const {rev}=await api('GET','/api/rev'); if(!force&&rev===REV){ setStatus(true); return; }
-    const s=await api('GET','/api/state'); REV=s.rev; DELIV=s.deliv||{};
+    const s=await api('GET','/api/state'); REV=s.rev; DELIV=s.deliv||{}; AJ=s.ajustes||{};
     for(const k of Object.keys(SLOTS)){ const d=s.datasets[k];
       if(d) setData(k,d.rows,`${d.name} — enviado por ${d.quem||'?'} em ${d.ts}`); }
     render(); setStatus(true);
@@ -254,10 +272,10 @@ const get=(r,m,f)=>m[f]?r[m[f]]:'';
 
 function consolidate(){
   const orders=new Map();  // ordem -> obj
-  const O=(id)=>{ if(!orders.has(id)) orders.set(id,{ordem:id,desc:'',semana:'',disc:'',tarefa:'',ops:[],mats:[],inGpi:false}); return orders.get(id); };
+  const O=(id)=>{ if(!orders.has(id)) orders.set(id,{ordem:id,desc:'',semana:'',disc:'',tarefa:'',riscoTxt:'',ops:[],mats:[],inGpi:false}); return orders.get(id); };
   if(state.gpi){ const m=state.gpi.map; state.gpi.rows.forEach(r=>{ const id=normOrd(get(r,m,'ordem')); if(!id)return;
       const o=O(id); o.inGpi=true; o.semana=String(get(r,m,'semana')||o.semana); o.desc=String(get(r,m,'descricao')||o.desc);
-      o.disc=String(get(r,m,'disciplina')||o.disc); o.tarefa=String(get(r,m,'tarefa')||o.tarefa); }); }
+      o.disc=String(get(r,m,'disciplina')||o.disc); o.tarefa=String(get(r,m,'tarefa')||o.tarefa); o.riscoTxt=String(get(r,m,'risco')||o.riscoTxt); }); }
   if(state.ops){ const m=state.ops.map; state.ops.rows.forEach(r=>{ const id=normOrd(get(r,m,'ordem')); if(!id)return;
       const o=O(id); if(!o.desc) o.desc=String(get(r,m,'descOrdem')||'');
       o.ops.push({op:String(get(r,m,'operacao')),texto:String(get(r,m,'texto')),centro:String(get(r,m,'centro')),status:String(get(r,m,'status'))}); }); }
@@ -284,7 +302,7 @@ function consolidate(){
     if(!o.disc) o.disc=o.mainDisc;
     o.sSup= !state.ops?['na','—']: o.support.length?['warn','apoio: '+[...new Set(o.support.map(p=>disc(p.centro)))].join(', ')]:['na','sem apoio'];
     // risco
-    o.sRisk=['na','não avaliado'];
+    o.sRisk= state.gpi&&state.gpi.map.risco ? riskStatus(o.riscoTxt) : ['na','não avaliado'];
     // material
     const mats=o.mats.filter(x=>x.res>0);
     if(!state.mat) o.sMat=['na','sem planilha de materiais'];
@@ -297,7 +315,11 @@ function consolidate(){
       x.baixado=x.res>0&&x.bx>=x.res; x.deliv=x.baixado?DELIV[x.key]:null; });
     const bx=o.mats.filter(x=>x.baixado), dl=bx.filter(x=>x.deliv);
     o.sDel= !bx.length?['na','—'] : dl.length===bx.length?['ok','entregue'] : dl.length?['warn',`entregue ${dl.length}/${bx.length}`] : ['warn','aguardando entrega'];
-    o.pend=o.sScaf[0]==='bad'||o.sScaf[0]==='warn'&&hasStatus||o.sMat[0]==='bad'||o.sMat[0]==='warn'||o.sDel[0]==='warn';
+    // ajustes manuais (sobrepõem o cálculo automático)
+    o.auto={scaf:o.sScaf,sup:o.sSup,risk:o.sRisk,mat:o.sMat}; o.adj={};
+    for(const [f,prop] of [['scaf','sScaf'],['sup','sSup'],['risk','sRisk'],['mat','sMat']]){
+      const a=AJ[o.ordem+'|'+f]; if(a&&LBL[a.status]){ o.adj[f]=a; o[prop]=[a.status,'✎ '+LBL[a.status]]; } }
+    o.pend=o.sScaf[0]==='bad'||o.sScaf[0]==='warn'&&(hasStatus||o.adj.scaf)||o.sMat[0]==='bad'||o.sMat[0]==='warn'||o.sDel[0]==='warn'||o.sRisk[0]==='bad'||o.sRisk[0]==='warn';
   }
   return [...orders.values()];
 }
@@ -305,26 +327,81 @@ function consolidate(){
 // ---------- confirmação local de entrega de material ----------
 // Guardada no navegador (localStorage). Use "Backup das entregas" para levar a outro computador.
 let DELIV={}; try{ DELIV=JSON.parse(localStorage.getItem('deliv')||'{}'); }catch(e){}
+// ---------- ajustes manuais ----------
+// Por ordem e por campo (andaime, apoio, risco, material): corrige o status automático, com motivo, responsável e data.
+const LBL={ok:'ok / pronto',warn:'atenção',bad:'pendente',na:'não se aplica'};
+const FN={scaf:'Andaime',sup:'Apoio',risk:'Risco nível 2',mat:'Material'};
+let AJ={}; try{ AJ=JSON.parse(localStorage.getItem('ajustes')||'{}'); }catch(e){}
+const saveAj=()=>{ try{ localStorage.setItem('ajustes',JSON.stringify(AJ)); }catch(e){ alert('Não foi possível salvar os ajustes no navegador.'); } };
+async function saveAdj(ordem,f){
+  const st=document.getElementById(`adjS_${ordem}_${f}`).value, nota=document.getElementById(`adjN_${ordem}_${f}`).value.trim();
+  const w=who()||(DEMO?'demo':''), key=ordem+'|'+f;
+  if(st&&!w){ alert('Informe o responsável (campo "Responsável") antes de fazer um ajuste manual.'); return render(); }
+  if(SERVER&&!DEMO){
+    try{ if(st) await api('POST','/api/ajuste',{key,status:st,nota,quem:w}); else await api('POST','/api/ajuste/remove',{key,quem:w}); await sync(true); }
+    catch(e){ alert('Falha ao salvar no servidor: '+e.message); render(); }
+    return;
+  }
+  if(st) AJ[key]={status:st,nota,quem:w,ts:nowStr()}; else delete AJ[key];
+  if(!DEMO) saveAj(); setTimeout(render,0);
+}
+
+// ---------- modo demonstração ----------
+// Dados fictícios só na tela: não vão ao servidor e não sobrescrevem nada. "Sair" devolve o painel real.
+let DEMO=false, SNAP=null;
+function showDemo(on){ document.getElementById('demoBar').style.display=on?'flex':'none'; document.getElementById('btnDemo').style.display=on?'none':''; setStatus(true); }
+function loadDemo(){
+  if(DEMO) return;
+  SNAP={state:{},info:{},DELIV,AJ};
+  for(const k of Object.keys(SLOTS)){ SNAP.state[k]=state[k]; SNAP.info[k]=document.getElementById('info_'+k).textContent; state[k]=null; }
+  DEMO=true; DELIV={}; AJ={};
+  setData('gpi',[{Ordem:'4000101',Semana:'48',Descrição:'Troca de válvula P-101',Disciplina:'MEC','Risco nível 2':'Realizada'},
+    {Ordem:'4000102',Semana:'48',Descrição:'Calibração PT-205',Disciplina:'INS','Risco nível 2':'Pendente'},
+    {Ordem:'4000103',Semana:'48',Descrição:'Reparo de estrutura TQ-3',Disciplina:'CAL','Risco nível 2':''}],'exemplo_gpi');
+  setData('ops',[
+    {Ordem:'4000101',Operação:'0010',Texto:'Montagem de andaime','Centro Trab':'AND-01','Status do sistema':'CNF'},
+    {Ordem:'4000101',Operação:'0020',Texto:'Trocar válvula','Centro Trab':'MEC-01','Status do sistema':'LIB'},
+    {Ordem:'4000101',Operação:'0030',Texto:'Isolamento elétrico','Centro Trab':'ELE-01','Status do sistema':'LIB'},
+    {Ordem:'4000102',Operação:'0010',Texto:'Calibrar transmissor','Centro Trab':'INS-01','Status do sistema':'LIB'},
+    {Ordem:'4000103',Operação:'0010',Texto:'Andaime fachadeiro','Centro Trab':'AND-01','Status do sistema':'LIB'},
+    {Ordem:'4000103',Operação:'0020',Texto:'Soldar suporte','Centro Trab':'CAL-01','Status do sistema':'LIB'}],'exemplo_operacoes');
+  setData('mat',[
+    {Ordem:'4000101',Material:'10001',Descrição:'Válvula gaveta 4"','Qtd Reservada':'1','Qtd Retirada':'1'},
+    {Ordem:'4000101',Material:'10002',Descrição:'Junta espiralada','Qtd Reservada':'2','Qtd Retirada':'0'},
+    {Ordem:'4000103',Material:'20001',Descrição:'Eletrodo E7018','Qtd Reservada':'5','Qtd Retirada':'5'}],'exemplo_materiais');
+  showDemo(true);
+}
+function exitDemo(resync=true){
+  if(!DEMO) return;
+  DEMO=false; DELIV=SNAP.DELIV; AJ=SNAP.AJ; expanded.clear();
+  for(const k of Object.keys(SLOTS)){
+    const s=SNAP.state[k];
+    if(s){ setData(k,s.rows,''); state[k].map=s.map; document.getElementById('info_'+k).textContent=SNAP.info[k]; }
+    else{ state[k]=null; document.getElementById('info_'+k).textContent=''; document.getElementById('map_'+k).innerHTML=''; }
+  }
+  SNAP=null; showDemo(false); render();
+  if(SERVER&&resync) sync(true);
+}
 const saveDeliv=()=>{ try{ localStorage.setItem('deliv',JSON.stringify(DELIV)); }catch(e){ alert('Não foi possível salvar no navegador. Use o backup das entregas.'); } };
 const who=()=>{ const v=document.getElementById('fWho').value.trim(); try{localStorage.setItem('who',v)}catch(e){} return v; };
 const nowStr=()=>new Date().toLocaleString('pt-BR');
 async function confirmDeliv(key,on){
   const w=who();
   if(on&&!w){ alert('Informe o responsável pela confirmação (campo "Responsável") antes de confirmar.'); return render(); }
-  if(SERVER){
+  if(SERVER&&!DEMO){
     try{ if(on) await api('POST','/api/deliv',{keys:[key],quem:w}); else await api('POST','/api/deliv/remove',{key,quem:w}); await sync(true); }
     catch(e){ alert('Falha ao salvar no servidor: '+e.message); render(); }
     return;
   }
   if(on) DELIV[key]={ts:nowStr(),quem:w}; else delete DELIV[key];
-  saveDeliv(); render();
+  if(!DEMO) saveDeliv(); render();
 }
 async function confirmAll(ordem){
   const w=who(); if(!w){ alert('Informe o responsável pela confirmação (campo "Responsável") antes de confirmar.'); return; }
   const o=current.find(x=>x.ordem===ordem); if(!o)return;
   const keys=o.mats.filter(x=>x.baixado&&!x.deliv).map(x=>x.key);
-  if(SERVER){ try{ await api('POST','/api/deliv',{keys,quem:w}); await sync(true); }catch(e){ alert('Falha ao salvar no servidor: '+e.message); } return; }
-  keys.forEach(k=>{ DELIV[k]={ts:nowStr(),quem:w}; }); saveDeliv(); render();
+  if(SERVER&&!DEMO){ try{ await api('POST','/api/deliv',{keys,quem:w}); await sync(true); }catch(e){ alert('Falha ao salvar no servidor: '+e.message); } return; }
+  keys.forEach(k=>{ DELIV[k]={ts:nowStr(),quem:w}; }); if(!DEMO) saveDeliv(); render();
 }
 function backupDeliv(){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(DELIV,null,1)],{type:'application/json'}));
@@ -337,7 +414,7 @@ function restoreDeliv(file){ if(!file)return; const r=new FileReader();
 // ---------- tela ----------
 let sortKey='ordem',sortDir=1,expanded=new Set(),current=[];
 const pill=(s)=>`<span class="dot ${s[0]}">${s[1]}</span>`;
-const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function fillSelect(id,vals){ const el=document.getElementById(id), cur=el.value;
   el.innerHTML='<option value="">todas</option>'+vals.map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join(''); }
@@ -350,15 +427,15 @@ function render(){
   else if(state.gpi) all=all.filter(o=>o.inGpi);
   fillSelect('fWeek',[...new Set(all.map(o=>o.semana).filter(Boolean))].sort());
   fillSelect('fDisc',[...new Set(all.map(o=>o.disc).filter(Boolean))].sort());
-  const q=norm(document.getElementById('fSearch').value), w=fWeek.value, d=fDisc.value, sc=fScaf.value, mt=fMat.value, dv=fDel.value, pe=fPend.checked;
-  let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
+  const q=norm(document.getElementById('fSearch').value), w=fWeek.value, d=fDisc.value, sc=fScaf.value, mt=fMat.value, rk=fRisk.value, dv=fDel.value, pe=fPend.checked;
+  let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!rk||o.sRisk[0]===rk)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
   const val=o=>({ordem:o.ordem,desc:o.desc,semana:o.semana,disc:o.disc,scaf:o.sScaf[0],sup:o.sSup[1],mat:o.sMat[0],del:o.sDel[1]}[sortKey]);
   rows.sort((a,b)=>String(val(a)).localeCompare(String(val(b)),'pt',{numeric:true})*sortDir);
   current=rows;
   const c=(f)=>rows.filter(f).length;
   document.getElementById('kpis').innerHTML=[
     ['Ordens',rows.length],['Andaime pronto',c(o=>o.sScaf[0]==='ok')],['Andaime pendente',c(o=>o.sScaf[0]==='bad'||o.sScaf[0]==='warn')],
-    ['Com apoio',c(o=>o.support.length)],['Material baixado',c(o=>o.sMat[0]==='ok')],['Material pendente/parcial',c(o=>o.sMat[0]==='bad'||o.sMat[0]==='warn')],
+    ['Com apoio',c(o=>o.sSup[0]==='warn')],['Material baixado',c(o=>o.sMat[0]==='ok')],['Material pendente/parcial',c(o=>o.sMat[0]==='bad'||o.sMat[0]==='warn')],
     ['Aguardando entrega',c(o=>o.sDel[0]==='warn')],['Entrega confirmada',c(o=>o.sDel[0]==='ok')]
   ].map(([t,n])=>`<div class="kpi"><b>${n}</b>${t}</div>`).join('');
   if(!all.length){ tableWrap.innerHTML='<div class="empty"><div style="font-size:40px">📂</div><b>Nenhuma ordem para mostrar</b><br>Carregue as planilhas acima ou clique em “Carregar exemplo”.</div>'; return; }
@@ -372,6 +449,13 @@ function render(){
         <b>Apoio de outras disciplinas</b>${li(o.support.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
         <b>Materiais</b>${li(o.mats.map(x=>`<li>${esc(x.mat)} ${esc(x.desc)} — ${x.noQty?(x.bx?'baixado':'<b style="color:var(--bad)">pendente</b>')+(x.st?' ('+esc(x.st)+')':''):`reservado ${x.res}, baixado ${x.bx} ${x.res>0&&x.bx<x.res?'<b style="color:var(--bad)">(falta '+(x.res-x.bx)+')</b>':''}`}
           ${x.baixado?`<label class="deliv"><input type="checkbox" ${x.deliv?'checked':''} onchange="confirmDeliv('${x.key}',this.checked)"> entregue${x.deliv?' — '+esc(x.deliv.quem)+', '+esc(x.deliv.ts):''}</label>`:''}</li>`))}
+        <b>Risco nível 2 (planilha do nivelamento)</b><div>${o.riscoTxt?esc(o.riscoTxt):'<span class="mut">— (vazio ou coluna não mapeada)</span>'}</div>
+        <b>Ajustes manuais</b><div class="mut" style="margin-bottom:4px">Corrija o status quando o cálculo automático não refletir a realidade. Exige “Responsável” (passo 4). Escolha “automático” para desfazer.</div>
+        ${['scaf','sup','risk','mat'].map(f=>{ const a=o.adj[f]; const id=o.ordem+'_'+f;
+          return `<div class="adj"><b style="margin:0;color:var(--tx)">${FN[f]}</b><span class="mut">auto: ${esc(o.auto[f][1])}</span>
+            <select id="adjS_${id}" onchange="saveAdj('${o.ordem}','${f}')"><option value="">automático</option>${Object.entries(LBL).map(([k,v])=>`<option value="${k}" ${a&&a.status===k?'selected':''}>${v}</option>`).join('')}</select>
+            <input type="text" id="adjN_${id}" value="${a?esc(a.nota||''):''}" placeholder="motivo / observação" onchange="if(document.getElementById('adjS_${id}').value)saveAdj('${o.ordem}','${f}')">
+            <span class="mut">${a?esc(a.quem)+', '+esc(a.ts):''}</span></div>`; }).join('')}
         ${o.mats.some(x=>x.baixado&&!x.deliv)?`<button class="sec" onclick="confirmAll('${o.ordem}')">✔ Confirmar entrega de todos os baixados</button>`:''}</td></tr>`;
     }
   }
@@ -381,34 +465,19 @@ function sortBy(k){ if(sortKey===k)sortDir*=-1; else{sortKey=k;sortDir=1;} rende
 function toggle(id){ expanded.has(id)?expanded.delete(id):expanded.add(id); render(); }
 
 function exportXlsx(){
-  const data=current.map(o=>({Ordem:o.ordem,Descrição:o.desc,Semana:o.semana,Disciplina:o.disc,Andaime:o.sScaf[1],Apoio:o.sSup[1],'Risco nível 2':o.sRisk[1],Material:o.sMat[1],Entrega:o.sDel[1],
+  const data=current.map(o=>({Ordem:o.ordem,Descrição:o.desc,Semana:o.semana,Disciplina:o.disc,Andaime:o.sScaf[1],Apoio:o.sSup[1],'Risco nível 2':o.sRisk[1],'Risco (planilha)':o.riscoTxt,Material:o.sMat[1],Entrega:o.sDel[1],
     'Materiais pendentes':o.mats.filter(x=>x.res>x.bx).map(x=>x.noQty?`${x.mat} (pendente)`:`${x.mat} (falta ${x.res-x.bx})`).join('; ')}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),'Resumo');
   const ent=[]; current.forEach(o=>o.mats.filter(x=>x.deliv).forEach(x=>ent.push({Ordem:o.ordem,Material:x.mat,Descrição:x.desc,'Entregue em':x.deliv.ts,Responsável:x.deliv.quem})));
+  const aj=[]; current.forEach(o=>Object.entries(o.adj).forEach(([f,a])=>aj.push({Ordem:o.ordem,Campo:FN[f],'Automático':o.auto[f][1],'Ajustado para':LBL[a.status],Motivo:a.nota,Responsável:a.quem,Data:a.ts})));
+  if(aj.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(aj),'Ajustes manuais');
   if(ent.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(ent),'Entregas confirmadas');
   XLSX.writeFile(wb,'resumo_ordens.xlsx');
-}
-
-// ---------- exemplo ----------
-function loadDemo(){
-  setData('gpi',[{Ordem:'4000101',Semana:'48',Descrição:'Troca de válvula P-101',Disciplina:'MEC'},{Ordem:'4000102',Semana:'48',Descrição:'Calibração PT-205',Disciplina:'INS'},{Ordem:'4000103',Semana:'48',Descrição:'Reparo de estrutura TQ-3',Disciplina:'CAL'}],'exemplo_gpi');
-  setData('ops',[
-    {Ordem:'4000101',Operação:'0010',Texto:'Montagem de andaime','Centro Trab':'AND-01','Status do sistema':'CNF'},
-    {Ordem:'4000101',Operação:'0020',Texto:'Trocar válvula','Centro Trab':'MEC-01','Status do sistema':'LIB'},
-    {Ordem:'4000101',Operação:'0030',Texto:'Isolamento elétrico','Centro Trab':'ELE-01','Status do sistema':'LIB'},
-    {Ordem:'4000102',Operação:'0010',Texto:'Calibrar transmissor','Centro Trab':'INS-01','Status do sistema':'LIB'},
-    {Ordem:'4000103',Operação:'0010',Texto:'Andaime fachadeiro','Centro Trab':'AND-01','Status do sistema':'LIB'},
-    {Ordem:'4000103',Operação:'0020',Texto:'Soldar suporte','Centro Trab':'CAL-01','Status do sistema':'LIB'}],'exemplo_operacoes');
-  setData('mat',[
-    {Ordem:'4000101',Material:'10001',Descrição:'Válvula gaveta 4"','Qtd Reservada':'1','Qtd Retirada':'1'},
-    {Ordem:'4000101',Material:'10002',Descrição:'Junta espiralada','Qtd Reservada':'2','Qtd Retirada':'0'},
-    {Ordem:'4000103',Material:'20001',Descrição:'Eletrodo E7018','Qtd Reservada':'5','Qtd Retirada':'5'}],'exemplo_materiais');
 }
 
 try{ fWho.value=localStorage.getItem('who')||''; }catch(e){}
 buildSlots(); render(); setStatus(false);
 if(SERVER){
-  document.getElementById('btnDemo').style.display='none';
   document.getElementById('privNote').innerHTML='🌐 Ao carregar uma planilha, ela é guardada no servidor e <b>todos</b> passam a ver o mesmo painel (a última enviada vale). As colunas são reconhecidas automaticamente; corrija nos seletores se precisar.';
   document.getElementById('delivNote').innerHTML='Para materiais já baixados: abra a ordem (clique na linha) e marque “entregue” no momento da entrega real. Fica salvo no <b>servidor</b>, com data/hora e responsável, e todos veem na hora. O backup é opcional.';
   sync(true); setInterval(()=>sync(false),10000);

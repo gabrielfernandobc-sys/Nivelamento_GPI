@@ -48,6 +48,7 @@ def init_db():
             INSERT OR IGNORE INTO meta VALUES('rev', 0);
             CREATE TABLE IF NOT EXISTS dataset(k TEXT PRIMARY KEY, name TEXT, quem TEXT, ts TEXT, rows TEXT);
             CREATE TABLE IF NOT EXISTS deliv(key TEXT PRIMARY KEY, quem TEXT, ts TEXT);
+            CREATE TABLE IF NOT EXISTS ajuste(key TEXT PRIMARY KEY, status TEXT, nota TEXT, quem TEXT, ts TEXT);
             CREATE TABLE IF NOT EXISTS log(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, acao TEXT, chave TEXT, quem TEXT);
         """)
 
@@ -116,8 +117,11 @@ class Handler(BaseHTTPRequestHandler):
                     meta = json.dumps({'name': r['name'], 'quem': r['quem'], 'ts': r['ts']}, ensure_ascii=False)
                     parts.append('%s:%s' % (json.dumps(r['k']), meta[:-1] + ',"rows":' + r['rows'] + '}'))
                 deliv = {r['key']: {'quem': r['quem'], 'ts': r['ts']} for r in con.execute('SELECT * FROM deliv')}
-                out = '{"rev":%d,"datasets":{%s},"deliv":%s}' % (
-                    get_rev(con), ','.join(parts), json.dumps(deliv, ensure_ascii=False))
+                ajustes = {r['key']: {'status': r['status'], 'nota': r['nota'], 'quem': r['quem'], 'ts': r['ts']}
+                           for r in con.execute('SELECT * FROM ajuste')}
+                out = '{"rev":%d,"datasets":{%s},"deliv":%s,"ajustes":%s}' % (
+                    get_rev(con), ','.join(parts), json.dumps(deliv, ensure_ascii=False),
+                    json.dumps(ajustes, ensure_ascii=False))
                 return self.send(200, out)
         return self.jerr(404, 'não encontrado')
 
@@ -161,6 +165,22 @@ class Handler(BaseHTTPRequestHandler):
                 key = str(data.get('key') or '')
                 con.execute('DELETE FROM deliv WHERE key=?', (key,))
                 con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'desfez', key, quem))
+                bump(con)
+                return self.send(200, json.dumps({'rev': get_rev(con)}))
+            if path == '/api/ajuste' and self.command == 'POST':
+                key = str(data.get('key') or '')
+                status = str(data.get('status') or '')
+                if not key or status not in ('ok', 'warn', 'bad', 'na') or not quem:
+                    return self.jerr(400, 'informe chave, status e responsável')
+                con.execute('INSERT OR REPLACE INTO ajuste VALUES(?,?,?,?,?)',
+                            (key, status, str(data.get('nota') or '')[:500], quem, now()))
+                con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'ajuste:' + status, key, quem))
+                bump(con)
+                return self.send(200, json.dumps({'rev': get_rev(con)}))
+            if path == '/api/ajuste/remove' and self.command == 'POST':
+                key = str(data.get('key') or '')
+                con.execute('DELETE FROM ajuste WHERE key=?', (key,))
+                con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'ajuste desfeito', key, quem))
                 bump(con)
                 return self.send(200, json.dumps({'rev': get_rev(con)}))
         return self.jerr(404, 'não encontrado')
