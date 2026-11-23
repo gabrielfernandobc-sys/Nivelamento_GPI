@@ -47,10 +47,20 @@ def init_db():
             CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v INTEGER);
             INSERT OR IGNORE INTO meta VALUES('rev', 0);
             CREATE TABLE IF NOT EXISTS dataset(k TEXT PRIMARY KEY, name TEXT, quem TEXT, ts TEXT, rows TEXT);
+            CREATE TABLE IF NOT EXISTS planilha(id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, semana TEXT, name TEXT, quem TEXT, ts TEXT, nlinhas INTEGER, rows TEXT);
             CREATE TABLE IF NOT EXISTS deliv(key TEXT PRIMARY KEY, quem TEXT, ts TEXT);
             CREATE TABLE IF NOT EXISTS ajuste(key TEXT PRIMARY KEY, status TEXT, nota TEXT, quem TEXT, ts TEXT);
             CREATE TABLE IF NOT EXISTS log(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, acao TEXT, chave TEXT, quem TEXT);
         """)
+
+
+def migrate(con):
+    # versão anterior guardava só a última planilha de cada tipo: vira o 1º registro da base (semana em branco)
+    if con.execute('SELECT COUNT(*) FROM planilha').fetchone()[0] == 0:
+        for r in con.execute('SELECT k,name,quem,ts,rows FROM dataset').fetchall():
+            n = len(json.loads(r['rows']))
+            con.execute('INSERT INTO planilha(tipo,semana,name,quem,ts,nlinhas,rows) VALUES(?,?,?,?,?,?,?)',
+                        (r['k'], '', r['name'], r['quem'], r['ts'], n, r['rows']))
 
 
 def now():
@@ -111,16 +121,23 @@ class Handler(BaseHTTPRequestHandler):
         with db() as con:
             if path == '/api/rev':
                 return self.send(200, json.dumps({'rev': get_rev(con)}))
+            if path.startswith('/api/planilha/'):
+                try:
+                    pid = int(path.rsplit('/', 1)[1])
+                except ValueError:
+                    return self.jerr(400, 'id inválido')
+                r = con.execute('SELECT rows FROM planilha WHERE id=?', (pid,)).fetchone()
+                if not r:
+                    return self.jerr(404, 'planilha não encontrada')
+                return self.send(200, '{"rows":' + r['rows'] + '}')
             if path == '/api/state':
-                parts = []
-                for r in con.execute('SELECT k,name,quem,ts,rows FROM dataset'):
-                    meta = json.dumps({'name': r['name'], 'quem': r['quem'], 'ts': r['ts']}, ensure_ascii=False)
-                    parts.append('%s:%s' % (json.dumps(r['k']), meta[:-1] + ',"rows":' + r['rows'] + '}'))
+                planilhas = [dict(r) for r in con.execute(
+                    'SELECT id,tipo,semana,name,quem,ts,nlinhas FROM planilha ORDER BY id')]
                 deliv = {r['key']: {'quem': r['quem'], 'ts': r['ts']} for r in con.execute('SELECT * FROM deliv')}
                 ajustes = {r['key']: {'status': r['status'], 'nota': r['nota'], 'quem': r['quem'], 'ts': r['ts']}
                            for r in con.execute('SELECT * FROM ajuste')}
-                out = '{"rev":%d,"datasets":{%s},"deliv":%s,"ajustes":%s}' % (
-                    get_rev(con), ','.join(parts), json.dumps(deliv, ensure_ascii=False),
+                out = '{"rev":%d,"planilhas":%s,"deliv":%s,"ajustes":%s}' % (
+                    get_rev(con), json.dumps(planilhas, ensure_ascii=False), json.dumps(deliv, ensure_ascii=False),
                     json.dumps(ajustes, ensure_ascii=False))
                 return self.send(200, out)
         return self.jerr(404, 'não encontrado')
@@ -142,14 +159,27 @@ class Handler(BaseHTTPRequestHandler):
             return self.jerr(400, 'corpo inválido: %s' % e)
         quem = str(data.get('quem') or '')[:80]
         with WRITE_LOCK, db() as con:
-            if path.startswith('/api/dataset/') and self.command == 'PUT':
-                k = path.rsplit('/', 1)[1]
+            if path == '/api/planilha' and self.command == 'POST':
+                tipo = str(data.get('tipo') or '')
                 rows = data.get('rows')
-                if k not in DATASETS or not isinstance(rows, list):
-                    return self.jerr(400, 'dataset inválido')
-                con.execute('INSERT OR REPLACE INTO dataset VALUES(?,?,?,?,?)',
-                            (k, str(data.get('name') or '')[:200], quem, now(), json.dumps(rows, ensure_ascii=False)))
-                con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'upload', k, quem))
+                if tipo not in DATASETS or not isinstance(rows, list):
+                    return self.jerr(400, 'planilha inválida')
+                cur = con.execute('INSERT INTO planilha(tipo,semana,name,quem,ts,nlinhas,rows) VALUES(?,?,?,?,?,?,?)',
+                                  (tipo, str(data.get('semana') or '')[:20], str(data.get('name') or '')[:200], quem, now(),
+                                   len(rows), json.dumps(rows, ensure_ascii=False)))
+                con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'upload', '%s #%d' % (tipo, cur.lastrowid), quem))
+                bump(con)
+                return self.send(200, json.dumps({'id': cur.lastrowid, 'rev': get_rev(con)}))
+            if path == '/api/planilha/delete' and self.command == 'POST':
+                pid = int(data.get('id') or 0)
+                con.execute('DELETE FROM planilha WHERE id=?', (pid,))
+                con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'planilha excluída', str(pid), quem))
+                bump(con)
+                return self.send(200, json.dumps({'rev': get_rev(con)}))
+            if path == '/api/planilha/semana' and self.command == 'POST':
+                pid = int(data.get('id') or 0)
+                con.execute('UPDATE planilha SET semana=? WHERE id=?', (str(data.get('semana') or '')[:20], pid))
+                con.execute('INSERT INTO log(ts,acao,chave,quem) VALUES(?,?,?,?)', (now(), 'semana alterada', '%d -> %s' % (pid, data.get('semana')), quem))
                 bump(con)
                 return self.send(200, json.dumps({'rev': get_rev(con)}))
             if path == '/api/deliv' and self.command == 'POST':
@@ -205,6 +235,8 @@ def main():
     a = ap.parse_args()
     PIN = a.pin
     init_db()
+    with db() as con:
+        migrate(con)
     srv = ThreadingHTTPServer(('0.0.0.0', a.porta), Handler)
     print('Painel de Ordens SAP no ar. Ctrl+C para parar.')
     print('  Neste computador : http://localhost:%d' % a.porta)
