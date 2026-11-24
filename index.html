@@ -103,7 +103,7 @@
   .tab[hidden]{display:none}
   .drop{border:2px dashed var(--pri);border-radius:16px;padding:28px 18px;text-align:center;cursor:pointer;background:color-mix(in srgb,var(--pri) 5%,transparent);transition:background .15s}
   .drop.over,.drop:hover{background:color-mix(in srgb,var(--pri) 14%,transparent)}
-  .drop b{font-size:16px;display:block;margin-bottom:4px}.drop small{color:var(--mut)}
+  .drop>b{font-size:16px;display:block;margin-bottom:4px}.drop small{color:var(--mut)}
   .who select{width:100%;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
   .who select option{color:#172036}
   dialog{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:16px;padding:22px;width:min(440px,92vw);box-shadow:var(--sh)}
@@ -128,7 +128,7 @@
   .kpi.click:hover{transform:translateY(-2px);border-color:var(--pri)}
   .kpi.on{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri)}
   .kpinote{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--pri);border-radius:12px;padding:10px 14px;margin-bottom:10px}
-  @media(max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
+  @media(max-width:900px){.side{padding:12px;gap:10px}.side .legend,.who small{display:none}.side nav{display:grid;grid-template-columns:1fr 1fr}button.nav{padding:8px 10px;font-size:13px}.side .who{display:inline-block;width:calc(50% - 6px);vertical-align:top}.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
   @media(max-width:760px){header{padding:20px 14px 60px}main{padding:0 12px 30px}.legend{margin-left:0}table{display:block;overflow-x:auto}}
 </style>
 </head>
