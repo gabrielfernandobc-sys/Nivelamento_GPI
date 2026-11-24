@@ -115,6 +115,7 @@
   .dbt td.grp{background:var(--card2);font-weight:700;color:var(--pri)}
   .dbt button{padding:4px 10px;font-size:12px;margin-right:4px}
   button.danger{background:transparent;color:var(--bad);border:1px solid var(--bad);box-shadow:none}
+  details.cols{margin-top:8px}details.cols>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--pri)}
   .upl{margin:10px 0 0;padding:0;list-style:none;font-size:13px}.upl li{padding:3px 0}
   .layout main{overflow:hidden}
   #tableWrap{overflow-x:auto;border-radius:16px;padding-bottom:4px}
@@ -176,7 +177,7 @@
       <small>Pode enviar várias de uma vez. O sistema identifica o tipo (ordens niveladas, operações, materiais) e a <b>semana</b> de cada uma — e pergunta quando tiver dúvida. A planilha das <b>ordens niveladas (GPI)</b> é o padrão: define quais ordens aparecem no painel.</small>
       <input type="file" id="fileMulti" multiple accept=".xlsx,.xls,.csv,.txt" hidden></div>
     <ul class="upl" id="upLog"></ul>
-    <h3 style="margin:18px 0 4px">Colunas reconhecidas (semana ativa)</h3>
+    <h3 style="margin:18px 0 4px">Planilhas da semana ativa</h3>
     <div class="grid" id="slots"></div>
     <p class="mut" style="margin:12px 0" id="privNote">🔒 Os arquivos são lidos só no seu navegador. As colunas são reconhecidas automaticamente; corrija nos seletores se precisar — a escolha fica salva.</p>
     <button class="sec" id="btnDemo" onclick="loadDemo()">Carregar exemplo</button>
@@ -277,7 +278,7 @@ function buildSlots(){
   const el=document.getElementById('slots'); el.innerHTML='';
   for(const [k,sl] of Object.entries(SLOTS)){
     const d=document.createElement('div'); d.className='slot card'; d.style.margin=0;
-    d.innerHTML=`<b>${sl.title}</b><small>${sl.hint}</small><input type="file" accept=".xlsx,.xls,.csv,.txt" id="file_${k}" title="Enviar só este tipo"><div id="info_${k}" class="mut" style="margin-top:6px"></div><div id="map_${k}" class="map"></div>`;
+    d.innerHTML=`<b>${sl.title}</b><small>${sl.hint}</small><input type="file" accept=".xlsx,.xls,.csv,.txt" id="file_${k}" title="Enviar só este tipo"><div id="info_${k}" class="mut" style="margin-top:6px"></div><details class="cols" id="cols_${k}" hidden><summary>⚙ Ajustar colunas <span id="colsInfo_${k}"></span></summary><div id="map_${k}" class="map"></div></details>`;
     el.appendChild(d);
     d.querySelector('input').addEventListener('change',e=>{ if(e.target.files.length) handleFiles([...e.target.files],k); e.target.value=''; });
   }
@@ -310,6 +311,9 @@ function setData(k,rows,name){
   state[k]={headers,rows,map};
   document.getElementById('info_'+k).textContent=`${name}: ${rows.length} linhas`;
   const m=document.getElementById('map_'+k); m.innerHTML='';
+  const fl=Object.keys(SLOTS[k].fields), okN=fl.filter(f=>map[f]).length, miss=REQ[k].some(f=>!map[f]);
+  const det=document.getElementById('cols_'+k); det.hidden=false; det.open=miss;
+  document.getElementById('colsInfo_'+k).innerHTML=miss?'<b style="color:var(--bad)">— falta a coluna obrigatória</b>':`<span class="mut">— ${okN} de ${fl.length} reconhecidas</span>`;
   for(const f of Object.keys(SLOTS[k].fields)){
     const lab=document.createElement('span'); lab.textContent=f+(REQ[k].includes(f)?' *':'');
     const sel=document.createElement('select'); sel.innerHTML='<option value="">— não usar —</option>'+headers.map(h=>`<option ${map[f]===h?'selected':''}>${h}</option>`).join('');
@@ -339,7 +343,7 @@ async function refreshDb(){
   if(SERVER){ const s=await api('GET','/api/state'); REV=s.rev; DELIV=s.deliv||{}; AJ=s.ajustes||{}; DBM=s.planilhas||[]; }
   else DBM=LOCAL.map(({rows,...m})=>m);
 }
-function clearSlot(k){ state[k]=null; document.getElementById('info_'+k).textContent=''; document.getElementById('map_'+k).innerHTML=''; }
+function clearSlot(k){ state[k]=null; document.getElementById('info_'+k).textContent=''; document.getElementById('map_'+k).innerHTML=''; document.getElementById('cols_'+k).hidden=true; }
 async function applyWeek(force){
   if(DEMO||BUSY) return; BUSY=true;
   try{
@@ -616,7 +620,7 @@ function exitDemo(resync=true){
   for(const k of Object.keys(SLOTS)){
     const s=SNAP.state[k];
     if(s){ setData(k,s.rows,''); state[k].map=s.map; document.getElementById('info_'+k).textContent=SNAP.info[k]; }
-    else{ state[k]=null; document.getElementById('info_'+k).textContent=''; document.getElementById('map_'+k).innerHTML=''; }
+    else clearSlot(k);
   }
   SNAP=null; showDemo(false); render();
   if(SERVER&&resync) sync(true);
