@@ -101,6 +101,21 @@
   .srvbox{font-size:12px;opacity:.9}
   .layout main{margin:0;padding:24px 28px 40px;max-width:none;min-width:0}
   .tab[hidden]{display:none}
+  .drop{border:2px dashed var(--pri);border-radius:16px;padding:28px 18px;text-align:center;cursor:pointer;background:color-mix(in srgb,var(--pri) 5%,transparent);transition:background .15s}
+  .drop.over,.drop:hover{background:color-mix(in srgb,var(--pri) 14%,transparent)}
+  .drop b{font-size:16px;display:block;margin-bottom:4px}.drop small{color:var(--mut)}
+  .who select{width:100%;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
+  .who select option{color:#172036}
+  dialog{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:16px;padding:22px;width:min(440px,92vw);box-shadow:var(--sh)}
+  dialog::backdrop{background:rgba(10,14,30,.5)}
+  dialog h3{margin:0 0 6px}dialog p{margin:0 0 12px}dialog select,dialog input{width:100%;margin-bottom:8px}
+  .drow{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+  #toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:99;max-width:min(420px,92vw)}
+  .toast{background:var(--card);border:1px solid var(--bd);border-left:4px solid var(--pri);border-radius:12px;padding:10px 14px;box-shadow:var(--sh);font-size:13px}
+  .dbt td.grp{background:var(--card2);font-weight:700;color:var(--pri)}
+  .dbt button{padding:4px 10px;font-size:12px;margin-right:4px}
+  button.danger{background:transparent;color:var(--bad);border:1px solid var(--bad);box-shadow:none}
+  .upl{margin:10px 0 0;padding:0;list-style:none;font-size:13px}.upl li{padding:3px 0}
   .layout main{overflow:hidden}
   #tableWrap{overflow-x:auto;border-radius:16px;padding-bottom:4px}
   #tableWrap table{min-width:1250px}
@@ -124,9 +139,12 @@
   <nav>
     <button class="nav on" data-tab="painel" onclick="goTab('painel')"><i>📊</i>Painel de ordens</button>
     <button class="nav" data-tab="planilhas" onclick="goTab('planilhas')"><i>📂</i>Planilhas</button>
+    <button class="nav" data-tab="base" onclick="goTab('base')"><i>🗄️</i>Base de dados</button>
     <button class="nav" data-tab="regras" onclick="goTab('regras')"><i>⚙️</i>Regras de análise</button>
     <button class="nav" data-tab="entregas" onclick="goTab('entregas')"><i>📦</i>Entregas e backup</button>
   </nav>
+  <div class="who"><label>Semana ativa<select id="wkSel" onchange="pickWeek(this.value)"></select></label>
+    <small id="wkInfo"></small></div>
   <div class="who"><label>Responsável<input type="text" id="fWho" placeholder="seu nome" oninput="who()"></label>
     <small>Usado em confirmações de entrega, relatório e ajustes.</small></div>
   <div class="legend"><span>🟢 pronto</span><span>🟡 atenção</span><span>🔴 pendente</span><span>⚪ não se aplica</span></div>
@@ -134,7 +152,7 @@
 </aside>
 <main>
 <section class="tab" id="tab_painel">
-  <h2>Painel de ordens</h2>
+  <h2 id="painelTitle">Painel de ordens</h2>
   <div class="card"><div class="body" style="padding-top:16px"><div class="filters">
     <label>Buscar<input type="text" id="fSearch" placeholder="ordem ou descrição" oninput="render()"></label>
     <label>Semana<select id="fWeek" onchange="render()"></select></label>
@@ -154,11 +172,23 @@
 <section class="tab" id="tab_planilhas" hidden>
   <h2>Planilhas</h2>
   <div class="card"><div class="body">
+    <div class="drop" id="drop" onclick="fileMulti.click()"><b>⬆ Arraste as planilhas aqui ou clique para escolher</b>
+      <small>Pode enviar várias de uma vez. O sistema identifica o tipo (ordens niveladas, operações, materiais) e a <b>semana</b> de cada uma — e pergunta quando tiver dúvida. A planilha das <b>ordens niveladas (GPI)</b> é o padrão: define quais ordens aparecem no painel.</small>
+      <input type="file" id="fileMulti" multiple accept=".xlsx,.xls,.csv,.txt" hidden></div>
+    <ul class="upl" id="upLog"></ul>
+    <h3 style="margin:18px 0 4px">Colunas reconhecidas (semana ativa)</h3>
     <div class="grid" id="slots"></div>
     <p class="mut" style="margin:12px 0" id="privNote">🔒 Os arquivos são lidos só no seu navegador. As colunas são reconhecidas automaticamente; corrija nos seletores se precisar — a escolha fica salva.</p>
     <button class="sec" id="btnDemo" onclick="loadDemo()">Carregar exemplo</button>
   </div>
 </div>
+</section>
+<section class="tab" id="tab_base" hidden>
+  <h2>Base de dados</h2>
+  <div class="card"><div class="body" style="padding-top:16px">
+    <p class="mut" style="margin:0 0 12px" id="baseNote">Todas as planilhas enviadas ficam guardadas aqui, organizadas por semana. Para cada semana, vale a planilha mais recente de cada tipo. Você pode abrir uma semana, corrigir a semana de uma planilha ou excluir.</p>
+    <div id="baseWrap"></div>
+  </div></div>
 </section>
 <section class="tab" id="tab_regras" hidden>
   <h2>Regras de análise</h2>
@@ -181,12 +211,16 @@
 </section>
 </main>
 </div>
+<dialog id="dlg"><form method="dialog"><h3 id="dlgT"></h3><p class="mut" id="dlgP"></p>
+  <select id="dlgSel"></select><input type="text" id="dlgTxt" placeholder="">
+  <div class="drow"><button class="sec" value="cancel">Cancelar</button><button value="ok">Confirmar</button></div></form></dialog>
+<div id="toasts"></div>
 
 <script src="lib/xlsx.full.min.js"></script>
 <script>
 // ---------- configuração de planilhas e colunas ----------
 const SLOTS = {
-  gpi:{title:'Relação do GPI (ordens/tarefas niveladas)',hint:'Planilha do GPI da semana',
+  gpi:{title:'★ Ordens niveladas (GPI) — padrão',hint:'Define as ordens do painel da semana',
     fields:{ordem:['ordem','order','nº ordem','n° ordem','numero da ordem','nr ordem','ordem manutencao'],
             tarefa:['tarefa','task','atividade'],
             semana:['semana','week','sem'],
@@ -241,22 +275,17 @@ function autoMap(headers, fields){
 // ---------- leitura de arquivos ----------
 function buildSlots(){
   const el=document.getElementById('slots'); el.innerHTML='';
-  for(const [k,s] of Object.entries(SLOTS)){
+  for(const [k,sl] of Object.entries(SLOTS)){
     const d=document.createElement('div'); d.className='slot card'; d.style.margin=0;
-    d.innerHTML=`<b>${s.title}</b><small>${s.hint}</small><input type="file" accept=".xlsx,.xls,.csv,.txt" id="file_${k}"><div id="info_${k}" class="mut" style="margin-top:6px"></div><div id="map_${k}" class="map"></div>`;
+    d.innerHTML=`<b>${sl.title}</b><small>${sl.hint}</small><input type="file" accept=".xlsx,.xls,.csv,.txt" id="file_${k}" title="Enviar só este tipo"><div id="info_${k}" class="mut" style="margin-top:6px"></div><div id="map_${k}" class="map"></div>`;
     el.appendChild(d);
-    d.querySelector('input').addEventListener('change',e=>readFile(k,e.target.files[0]));
+    d.querySelector('input').addEventListener('change',e=>{ if(e.target.files.length) handleFiles([...e.target.files],k); e.target.value=''; });
   }
-}
-function readFile(k,file){
-  if(!file)return;
-  const r=new FileReader();
-  r.onload=e=>{ const wb=XLSX.read(e.target.result,{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
-    if(DEMO) exitDemo(false);   // carregar planilha real encerra o modo demo
-    setData(k,rows,file.name); if(SERVER) upload(k,rows,file.name); };
-  r.readAsArrayBuffer(file);
+  const dz=document.getElementById('drop'), fm=document.getElementById('fileMulti');
+  fm.addEventListener('change',e=>{ handleFiles([...e.target.files]); e.target.value=''; });
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('over');}));
+  dz.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) handleFiles([...e.dataTransfer.files]); });
 }
 
 // ---------- modo servidor (painel compartilhado) ----------
@@ -273,20 +302,6 @@ async function api(method,path,body){
 }
 function setStatus(ok){ const el=document.getElementById('srv'); if(!el)return;
   el.textContent=DEMO?'🧪 modo demonstração':!SERVER?'💾 modo local (sem servidor)':ok?'🟢 conectado ao servidor':'🔴 sem conexão com o servidor'; }
-async function upload(k,rows,name){
-  try{ const r=await api('PUT','/api/dataset/'+k,{name,quem:who(),rows}); REV=r.rev; setStatus(true); }
-  catch(e){ setStatus(false); alert('Falha ao enviar a planilha ao servidor: '+e.message); }
-}
-async function sync(force){
-  if(DEMO) return;
-  try{
-    const {rev}=await api('GET','/api/rev'); if(!force&&rev===REV){ setStatus(true); return; }
-    const s=await api('GET','/api/state'); REV=s.rev; DELIV=s.deliv||{}; AJ=s.ajustes||{};
-    for(const k of Object.keys(SLOTS)){ const d=s.datasets[k];
-      if(d) setData(k,d.rows,`${d.name} — enviado por ${d.quem||'?'} em ${d.ts}`); }
-    render(); setStatus(true);
-  }catch(e){ setStatus(false); }
-}
 function setData(k,rows,name){
   const headers=rows.length?Object.keys(rows[0]):[];
   let saved={}; try{saved=JSON.parse(localStorage.getItem('map_'+k)||'{}')}catch(e){}
@@ -302,6 +317,172 @@ function setData(k,rows,name){
     m.append(lab,sel);
   }
   render();
+}
+
+
+// ---------- base de dados: planilhas enviadas, organizadas por semana ----------
+// Servidor: guardada no banco (todos veem). Sem servidor: só na memória desta página.
+const TIPO={gpi:'Ordens niveladas (GPI)',ops:'Operações',mat:'Materiais'};
+let DBM=[], WEEK='', LOCAL=[], LOCALID=0, APPLIED={}, BUSY=false; const ROWS=new Map();
+try{ WEEK=localStorage.getItem('week')||''; }catch(e){}
+const wkLabel=w=>w?'Semana '+w:'sem semana';
+const weeks=()=>[...new Set(DBM.map(m=>m.semana))].sort((a,b)=>String(b).localeCompare(String(a),'pt',{numeric:true}));
+const store={
+  async add(rec){ if(SERVER){ const r=await api('POST','/api/planilha',rec); REV=r.rev; return r.id; }
+    const id=++LOCALID; LOCAL.push({id,tipo:rec.tipo,semana:rec.semana,name:rec.name,quem:rec.quem,ts:nowStr(),nlinhas:rec.rows.length,rows:rec.rows}); return id; },
+  async rows(id){ if(ROWS.has(id)) return ROWS.get(id);
+    const r=SERVER?(await api('GET','/api/planilha/'+id)).rows:LOCAL.find(x=>x.id===id).rows; ROWS.set(id,r); return r; },
+  async del(id){ if(SERVER){ const r=await api('POST','/api/planilha/delete',{id,quem:who()}); REV=r.rev; } else LOCAL=LOCAL.filter(x=>x.id!==id); ROWS.delete(id); },
+  async setWeek(id,semana){ if(SERVER){ const r=await api('POST','/api/planilha/semana',{id,semana,quem:who()}); REV=r.rev; } else LOCAL.find(x=>x.id===id).semana=semana; }
+};
+async function refreshDb(){
+  if(SERVER){ const s=await api('GET','/api/state'); REV=s.rev; DELIV=s.deliv||{}; AJ=s.ajustes||{}; DBM=s.planilhas||[]; }
+  else DBM=LOCAL.map(({rows,...m})=>m);
+}
+function clearSlot(k){ state[k]=null; document.getElementById('info_'+k).textContent=''; document.getElementById('map_'+k).innerHTML=''; }
+async function applyWeek(force){
+  if(DEMO||BUSY) return; BUSY=true;
+  try{
+    if(!weeks().includes(WEEK)) WEEK=DBM.length?DBM[DBM.length-1].semana:'';
+    for(const k of Object.keys(SLOTS)){
+      const m=[...DBM].reverse().find(x=>x.tipo===k&&x.semana===WEEK), id=m?m.id:0;
+      if(!force&&APPLIED[k]===id) continue;
+      APPLIED[k]=id;
+      if(!m){ clearSlot(k); continue; }
+      setData(k,await store.rows(id),`${m.name} — enviado por ${m.quem||'?'} em ${m.ts}`);
+    }
+  } finally { BUSY=false; }
+  try{ localStorage.setItem('week',WEEK); }catch(e){}
+  fillWeekSel(); renderBase(); render();
+}
+function fillWeekSel(){
+  const sel=document.getElementById('wkSel'), ws=weeks();
+  sel.innerHTML=ws.length?ws.map(w=>`<option value="${esc(w)}" ${w===WEEK?'selected':''}>${wkLabel(w)}</option>`).join(''):'<option value="">— nenhuma planilha —</option>';
+  const n=DBM.filter(m=>m.semana===WEEK).length;
+  document.getElementById('wkInfo').textContent=ws.length?`${n} planilha(s) nesta semana · ${DBM.length} na base`:'Envie planilhas na aba Planilhas.';
+  document.getElementById('painelTitle').textContent='Painel de ordens'+(DEMO?' — demonstração':ws.length?' — '+wkLabel(WEEK).toLowerCase():'');
+}
+function pickWeek(w){ WEEK=w; expanded.clear(); applyWeek(); }
+
+// ----- diálogo (pergunta ao usuário quando há dúvida) -----
+function askDialog({title,text,options=[],allowText=false,placeholder='',defaultVal=''}){
+  return new Promise(res=>{
+    const d=document.getElementById('dlg'), sel=document.getElementById('dlgSel'), txt=document.getElementById('dlgTxt');
+    document.getElementById('dlgT').textContent=title; document.getElementById('dlgP').textContent=text||'';
+    sel.style.display=options.length?'':'none';
+    sel.innerHTML=options.map(([v,l])=>`<option value="${esc(v)}" ${v===defaultVal?'selected':''}>${esc(l)}</option>`).join('');
+    txt.style.display=allowText?'':'none'; txt.value=''; txt.placeholder=placeholder;
+    d.onclose=()=>{ if(d.returnValue!=='ok') return res(null); const t=txt.value.trim(); res(allowText&&t?t.slice(0,20):(options.length?sel.value:'')); };
+    d.returnValue=''; d.showModal();
+  });
+}
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.getElementById('toasts').appendChild(t); setTimeout(()=>t.remove(),9000);
+  const li=document.createElement('li'); li.textContent=msg; const ul=document.getElementById('upLog'); ul.prepend(li); while(ul.children.length>12) ul.lastChild.remove(); }
+
+// ----- identificar tipo e semana -----
+function detectTipo(rows){
+  const nh=Object.keys(rows[0]).map(norm); const has=(...ks)=>nh.some(h=>ks.some(k=>h===k||h.includes(k)));
+  const sc={ops:(has('operacao','centro trab','ctrab','work center','centro de trab')?2:0)+(has('status do sistema','status sistema')?1:0),
+    mat:(has('material','componente','qtd reserv','qtd retir','quantidade necess','retirad','baixad')?2:0)+(has('qtd')?1:0),
+    gpi:(has('semana','week')?2:0)+(has('risco')?1:0)+(has('disciplina','especialidade')?1:0)};
+  const o=Object.entries(sc).sort((a,b)=>b[1]-a[1]);
+  return o[0][1]>=2&&o[0][1]>o[1][1]?o[0][0]:null;
+}
+function weekNum(v){ if(v==null||v===''||v instanceof Date) return ''; const m=String(v).trim().match(/^(?:semana|sem|week|wk|s|w)?[\s._-]*0*(\d{1,2})$/i);
+  return m&&+m[1]>=1&&+m[1]<=53?String(+m[1]):''; }
+async function detectWeek(tipo,rows,fname){
+  const headers=Object.keys(rows[0]), map=autoMap(headers,SLOTS[tipo].fields);
+  const semCol=tipo==='gpi'?map.semana:headers.find(h=>['semana','sem','week'].includes(norm(h)));
+  if(semCol){ const cnt={}; rows.forEach(r=>{ const w=weekNum(r[semCol]); if(w) cnt[w]=(cnt[w]||0)+1; });
+    const ks=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+    if(ks.length===1) return {semana:ks[0],sure:true,how:`coluna Semana = ${ks[0]}`};
+    if(ks.length>1) return {semana:ks[0],sure:false,how:`A coluna Semana tem várias semanas (${ks.slice(0,4).join(', ')}).`}; }
+  const fm=fname.match(/(?:^|[^a-z])(?:semana|sem|week|wk|s|w)[\s_-]*0*(\d{1,2})(?!\d)/i);
+  if(fm&&+fm[1]>=1&&+fm[1]<=53) return {semana:String(+fm[1]),sure:true,how:`nome do arquivo ("${fm[0].replace(/^[^a-z]/i,'')}")`};
+  if(tipo!=='gpi'){   // compara as ordens com as das planilhas GPI já guardadas
+    const om=map.ordem; const ords=new Set(rows.map(r=>normOrd(r[om])).filter(Boolean)); const sc=[];
+    for(const w of weeks()){ const g=[...DBM].reverse().find(x=>x.tipo==='gpi'&&x.semana===w); if(!g) continue;
+      const gr=await store.rows(g.id), gm=autoMap(Object.keys(gr[0]||{}),SLOTS.gpi.fields); const gs=new Set(gr.map(r=>normOrd(r[gm.ordem])));
+      let hit=0; ords.forEach(o=>{ if(gs.has(o)) hit++; }); sc.push([w,ords.size?hit/ords.size:0]); }
+    sc.sort((a,b)=>b[1]-a[1]);
+    if(sc.length&&sc[0][1]>=.5){ const clear=!sc[1]||sc[1][1]<sc[0][1]*.6, pct=Math.round(sc[0][1]*100);
+      return {semana:sc[0][0],sure:clear,how:clear?`${pct}% das ordens estão no GPI da semana ${sc[0][0]}`:`As ordens aparecem em mais de uma semana (melhor: ${sc[0][0]}, ${pct}%).`}; }
+  }
+  return {semana:WEEK||'',sure:false,how:'Não encontrei a semana no arquivo nem no nome.'};
+}
+function readRows(file){ return new Promise((ok,fail)=>{ const r=new FileReader();
+  r.onerror=()=>fail(new Error('não foi possível ler o arquivo'));
+  r.onload=e=>{ try{ let wb;
+      if(/\.(csv|txt)$/i.test(file.name)){   // texto do SAP/Excel costuma vir em Windows-1252: decodifica certo para manter acentos
+        const buf=new Uint8Array(e.target.result); let txt; try{ txt=new TextDecoder('utf-8',{fatal:true}).decode(buf); }catch(x){ txt=new TextDecoder('windows-1252').decode(buf); }
+        wb=XLSX.read(txt.replace(/^\uFEFF/,''),{type:'string'}); }
+      else wb=XLSX.read(e.target.result,{type:'array'}); ok(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:true})); }catch(x){ fail(x); } };
+  r.readAsArrayBuffer(file); }); }
+
+// ----- envio (vários arquivos; GPI primeiro) -----
+async function handleFiles(files,forceTipo){
+  if(DEMO) exitDemo(false);
+  const items=[];
+  for(const file of files){
+    try{ const rows=await readRows(file);
+      if(!rows.length){ toast(`⚠ ${file.name}: planilha vazia`); continue; }
+      let tipo=forceTipo||detectTipo(rows);
+      if(!tipo){ tipo=await askDialog({title:'Que planilha é esta?',text:`${file.name}: não consegui identificar o tipo. Se for a relação de ordens da semana, escolha GPI (padrão).`,options:Object.entries(TIPO),defaultVal:'gpi'}); if(!tipo) continue; }
+      items.push({file,rows,tipo});
+    }catch(e){ toast(`⚠ ${file.name}: ${e.message}`); }
+  }
+  items.sort((a,b)=>(b.tipo==='gpi')-(a.tipo==='gpi'));
+  let last;
+  for(const it of items){
+    try{
+      let {semana,sure,how}=await detectWeek(it.tipo,it.rows,it.file.name);
+      if(!sure){ semana=await askDialog({title:'De qual semana é esta planilha?',text:`${it.file.name} (${TIPO[it.tipo]}). ${how}`,
+          options:weeks().filter(Boolean).map(w=>[w,wkLabel(w)]).concat([['','sem semana']]),allowText:true,placeholder:'ou digite outra semana (ex.: 49)',defaultVal:semana});
+        if(semana===null) continue; semana=weekNum(semana)||semana; how='escolhida por você'; }
+      const rec={tipo:it.tipo,semana,name:it.file.name,quem:who(),rows:it.rows};
+      const id=await store.add(rec);
+      DBM.push({id,tipo:it.tipo,semana,name:it.file.name,quem:who(),ts:nowStr(),nlinhas:it.rows.length}); ROWS.set(id,it.rows);
+      last=semana; toast(`✔ ${TIPO[it.tipo]} → ${wkLabel(semana)} (${it.rows.length} linhas) — ${how}`);
+    }catch(e){ toast(`⚠ ${it.file.name}: ${e.message}`); setStatus(false); }
+  }
+  if(last!==undefined){ await refreshDb(); WEEK=last; await applyWeek(); }
+}
+
+// ----- tela da base de dados -----
+function renderBase(){
+  const el=document.getElementById('baseWrap'); if(!el) return;
+  if(DEMO){ el.innerHTML='<div class="empty">Saia do modo demonstração para ver a base de dados.</div>'; return; }
+  if(!DBM.length){ el.innerHTML='<div class="empty"><div style="font-size:40px">🗄️</div><b>Base vazia</b><br>As planilhas que você enviar na aba Planilhas aparecem aqui.</div>'; return; }
+  let h='<div style="overflow-x:auto"><table class="dbt"><tr><th>Tipo</th><th>Arquivo</th><th>Linhas</th><th>Enviado por</th><th>Data</th><th>Em uso</th><th>Ações</th></tr>';
+  for(const w of weeks()){
+    const inW=DBM.filter(m=>m.semana===w).sort((a,b)=>b.id-a.id);
+    h+=`<tr><td class="grp" colspan="7">${wkLabel(w)} — ${inW.length} planilha(s) ${w===WEEK?'· <i>semana ativa</i>':`<button class="sec" onclick="pickWeek('${esc(w)}');goTab('painel')">Abrir semana</button>`}
+      <button class="danger" style="float:right" onclick="delWeek('${esc(w)}')">🗑 Excluir semana</button></td></tr>`;
+    inW.forEach(m=>{ const uso=APPLIED[m.tipo]===m.id&&w===WEEK;
+      h+=`<tr><td>${TIPO[m.tipo]}</td><td>${esc(m.name)}</td><td>${m.nlinhas}</td><td>${esc(m.quem||'—')}</td><td>${esc(m.ts)}</td><td>${uso?'<span class="dot ok">em uso</span>':'<span class="mut">substituída</span>'}</td>
+        <td><button class="sec" onclick="editWeek(${m.id})">Alterar semana</button><button class="danger" onclick="delPlan(${m.id})">🗑 Excluir</button></td></tr>`; });
+  }
+  el.innerHTML=h+'</table></div>';
+  document.getElementById('baseNote').innerHTML=SERVER?'Todas as planilhas enviadas ficam guardadas <b>no servidor</b>, organizadas por semana, e todos veem a mesma base. Para cada semana vale a planilha mais recente de cada tipo. Excluir apaga para todos.':'⚠ Sem servidor, a base fica só na memória desta página (some ao fechar). Use o servidor para guardar o histórico.';
+}
+async function delPlan(id){ const m=DBM.find(x=>x.id===id); if(!m) return;
+  if(!confirm(`Excluir "${m.name}" (${TIPO[m.tipo]}, ${wkLabel(m.semana)}) da base de dados?\nNão dá para desfazer${SERVER?' e vale para todos os usuários':''}.`)) return;
+  try{ await store.del(id); await refreshDb(); await applyWeek(); }catch(e){ alert('Falha ao excluir: '+e.message); } }
+async function delWeek(w){ const ids=DBM.filter(m=>m.semana===w).map(m=>m.id);
+  if(!confirm(`Excluir TODAS as ${ids.length} planilhas da ${wkLabel(w).toLowerCase()}?\nNão dá para desfazer${SERVER?' e vale para todos os usuários':''}.`)) return;
+  try{ for(const id of ids) await store.del(id); await refreshDb(); await applyWeek(); }catch(e){ alert('Falha ao excluir: '+e.message); } }
+async function editWeek(id){ const m=DBM.find(x=>x.id===id); if(!m) return;
+  const w=await askDialog({title:'Alterar semana',text:`${m.name} (${TIPO[m.tipo]}) está em ${wkLabel(m.semana).toLowerCase()}.`,
+    options:weeks().filter(Boolean).map(x=>[x,wkLabel(x)]).concat([['','sem semana']]),allowText:true,placeholder:'ou digite outra semana (ex.: 49)',defaultVal:m.semana});
+  if(w===null) return;
+  try{ await store.setWeek(id,weekNum(w)||w); await refreshDb(); await applyWeek(true); }catch(e){ alert('Falha ao alterar: '+e.message); } }
+
+async function sync(force){
+  if(DEMO) return;
+  try{
+    if(!force){ const {rev}=await api('GET','/api/rev'); if(rev===REV){ setStatus(true); return; } }
+    await refreshDb(); await applyWeek(); setStatus(true);
+  }catch(e){ setStatus(false); }
 }
 
 // ---------- consolidação ----------
@@ -328,6 +509,8 @@ function consolidate(){
   for(const o of orders.values()){
     // andaime
     o.scaf=o.ops.filter(p=>norm(p.texto).includes(kwS));
+    // descritivo: GPI → descrição da ordem (operações) → texto da principal atividade (não andaime)
+    if(!o.desc){ const pp=o.ops.find(x=>!o.scaf.includes(x)&&x.texto)||o.ops.find(x=>x.texto); if(pp) o.desc=pp.texto; }
     if(!state.ops) o.sScaf=['na','sem planilha de operações'];
     else if(!o.scaf.length) o.sScaf=['na','sem operação de andaime'];
     else if(!hasStatus) o.sScaf=['warn','existe (status não mapeado)'];
@@ -405,7 +588,7 @@ function goTab(t){ document.querySelectorAll('.tab').forEach(e=>e.hidden=e.id!==
 // ---------- modo demonstração ----------
 // Dados fictícios só na tela: não vão ao servidor e não sobrescrevem nada. "Sair" devolve o painel real.
 let DEMO=false, SNAP=null;
-function showDemo(on){ document.getElementById('demoBar').style.display=on?'flex':'none'; document.getElementById('btnDemo').style.display=on?'none':''; setStatus(true); }
+function showDemo(on){ document.getElementById('demoBar').style.display=on?'flex':'none'; document.getElementById('btnDemo').style.display=on?'none':''; document.getElementById('wkSel').disabled=on; setStatus(true); renderBase(); if(on) document.getElementById('painelTitle').textContent='Painel de ordens — demonstração'; else fillWeekSel(); }
 function loadDemo(){
   if(DEMO) return;
   SNAP={state:{},info:{},DELIV,AJ};
@@ -489,7 +672,7 @@ function render(){
   fillSelect('fWeek',[...new Set(all.map(o=>o.semana).filter(Boolean))].sort());
   fillSelect('fDisc',[...new Set(all.map(o=>o.disc).filter(Boolean))].sort());
   const q=norm(document.getElementById('fSearch').value), w=fWeek.value, d=fDisc.value, sc=fScaf.value, mt=fMat.value, rk=fRisk.value, fm=fFim.value, dv=fDel.value, pe=fPend.checked;
-  let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!rk||o.sRisk[0]===rk)&&(!fm||o.sFim[0]===fm)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
+  let rows=all.filter(o=>(!q||norm(o.ordem+' '+o.desc+' '+o.ops.map(p=>p.texto).join(' ')).includes(q))&&(!w||o.semana===w)&&(!d||o.disc===d)&&(!sc||o.sScaf[0]===sc)&&(!rk||o.sRisk[0]===rk)&&(!fm||o.sFim[0]===fm)&&(!mt||o.sMat[0]===mt)&&(!dv||(dv==='pend'?o.sDel[0]==='warn':o.sDel[0]===dv))&&(!pe||o.pend));
   const val=o=>({ordem:o.ordem,desc:o.desc,semana:o.semana,disc:o.disc,scaf:o.sScaf[0],sup:o.sSup[1],mat:o.sMat[0],del:o.sDel[1],rel:o.sRel[0],rep:o.sRep[1],fim:o.sFim[0]+o.falta.length}[sortKey]);
   rows.sort((a,b)=>String(val(a)).localeCompare(String(val(b)),'pt',{numeric:true})*sortDir);
   const base=rows, cnt=KPIS.map(([t,f])=>base.filter(f).length);
@@ -497,14 +680,16 @@ function render(){
   current=rows;
   document.getElementById('kpis').innerHTML=KPIS.map(([t],i)=>`<div class="kpi click${kpiSel===i&&i>0?' on':''}" onclick="pickKpi(${i})" title="Clique para ver as ordens"><b>${cnt[i]}</b>${t}</div>`).join('');
   const note=kpiSel>0?`<div class="kpinote"><span>Mostrando: <b>${KPIS[kpiSel][0]}</b> — ${rows.length} ordem(ns)${rows.length?': '+rows.slice(0,40).map(o=>esc(o.ordem)).join(', ')+(rows.length>40?'…':''):''}</span><button class="sec" onclick="pickKpi(0)">✖ Limpar</button></div>`:'';
-  if(!all.length){ tableWrap.innerHTML='<div class="empty"><div style="font-size:40px">📂</div><b>Nenhuma ordem para mostrar</b><br>Carregue as planilhas acima ou clique em “Carregar exemplo”.</div>'; return; }
+  if(!all.length){ tableWrap.innerHTML='<div class="empty"><div style="font-size:40px">📂</div><b>Nenhuma ordem para mostrar</b><br>Envie as planilhas na aba <b>Planilhas</b> (começando pela das ordens niveladas) ou use “Carregar exemplo”.</div>'; return; }
+  const gpiWarn=!state.gpi&&(state.ops||state.mat)?'<div class="kpinote" style="border-color:var(--warn)"><span>⚠ Esta semana não tem a planilha das <b>ordens niveladas (GPI)</b>: estão aparecendo todas as ordens das outras planilhas.</span></div>':'';
   const th=(k,t)=>`<th onclick="sortBy('${k}')">${t}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`;
   let h=`<table><tr>${th('ordem','Ordem')}${th('desc','Descrição')}${th('semana','Semana')}${th('disc','Disciplina')}${th('scaf','Andaime')}${th('sup','Apoio outra disc.')}<th>Risco nível 2</th>${th('mat','Material')}${th('del','Entrega')}${th('rel','Relatório')}${th('rep','Replan.')}${th('fim','Conclusão')}</tr>`;
   for(const o of rows){
     h+=`<tr class="row" onclick="toggle('${o.ordem}')"><td>${esc(o.ordem)}</td><td>${esc(o.desc)}</td><td>${esc(o.semana)}</td><td>${esc(o.disc)}</td><td>${pill(o.sScaf)}</td><td>${pill(o.sSup)}</td><td>${pill(o.sRisk)}</td><td>${pill(o.sMat)}</td><td>${pill(o.sDel)}</td><td>${pill(o.sRel)}</td><td>${pill(o.sRep)}</td><td>${pill(o.sFim)}</td></tr>`;
     if(expanded.has(o.ordem)){
       const li=a=>a.length?'<ul>'+a.join('')+'</ul>':'<div class="mut">—</div>';
-      h+=`<tr class="det"><td colspan="12"><b>Andaime</b>${li(o.scaf.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
+      h+=`<tr class="det"><td colspan="12"><b>Atividades da ordem</b>${li(o.ops.map(p=>`<li>${esc(p.op)} ${esc(p.texto)||'<span class="mut">(sem texto)</span>'} — ${esc(p.centro)}</li>`))}
+        <b>Andaime</b>${li(o.scaf.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
         <b>Apoio de outras disciplinas</b>${li(o.support.map(p=>`<li>${esc(p.op)} ${esc(p.texto)} — ${esc(p.centro)} — status: ${esc(p.status||'?')}</li>`))}
         <b>Materiais</b>${li(o.mats.map(x=>`<li>${esc(x.mat)} ${esc(x.desc)} — ${x.noQty?(x.bx?'baixado':'<b style="color:var(--bad)">pendente</b>')+(x.st?' ('+esc(x.st)+')':''):`reservado ${x.res}, baixado ${x.bx} ${x.res>0&&x.bx<x.res?'<b style="color:var(--bad)">(falta '+(x.res-x.bx)+')</b>':''}`}
           ${x.baixado?`<label class="deliv"><input type="checkbox" ${x.deliv?'checked':''} onchange="confirmDeliv('${x.key}',this.checked)"> entregue${x.deliv?' — '+esc(x.deliv.quem)+', '+esc(x.deliv.ts):''}</label>`:''}</li>`))}
@@ -527,7 +712,7 @@ function render(){
         ${o.mats.some(x=>x.baixado&&!x.deliv)?`<button class="sec" onclick="confirmAll('${o.ordem}')">✔ Confirmar entrega de todos os baixados</button>`:''}</td></tr>`;
     }
   }
-  tableWrap.innerHTML=note+h+'</table>'+(rows.length?'':'<div class="empty">Nenhuma ordem nessa condição.</div>');
+  tableWrap.innerHTML=gpiWarn+note+h+'</table>'+(rows.length?'':'<div class="empty">Nenhuma ordem nessa condição.</div>');
 }
 function sortBy(k){ if(sortKey===k)sortDir*=-1; else{sortKey=k;sortDir=1;} render(); }
 function toggle(id){ expanded.has(id)?expanded.delete(id):expanded.add(id); render(); }
@@ -545,9 +730,9 @@ function exportXlsx(){
 
 try{ const t=localStorage.getItem('tab'); if(t&&document.getElementById('tab_'+t)) goTab(t); }catch(e){}
 try{ fWho.value=localStorage.getItem('who')||''; }catch(e){}
-buildSlots(); render(); setStatus(false);
+buildSlots(); render(); setStatus(false); fillWeekSel(); renderBase();
 if(SERVER){
-  document.getElementById('privNote').innerHTML='🌐 Ao carregar uma planilha, ela é guardada no servidor e <b>todos</b> passam a ver o mesmo painel (a última enviada vale). As colunas são reconhecidas automaticamente; corrija nos seletores se precisar.';
+  document.getElementById('privNote').innerHTML='🌐 Cada planilha enviada é guardada na <b>base de dados</b> do servidor, por semana, e <b>todos</b> veem o mesmo painel. As colunas são reconhecidas automaticamente; corrija nos seletores se precisar.';
   document.getElementById('delivNote').innerHTML='Para materiais já baixados: abra a ordem (clique na linha) e marque “entregue” no momento da entrega real. Fica salvo no <b>servidor</b>, com data/hora e responsável, e todos veem na hora. O backup é opcional.';
   sync(true); setInterval(()=>sync(false),10000);
 }
