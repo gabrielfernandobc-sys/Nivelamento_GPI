@@ -114,6 +114,16 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, f.read(), ctype)
             except OSError:
                 return self.jerr(404, 'arquivo não encontrado')
+        if path.startswith('/lib/'):
+            name = os.path.basename(path)
+            ext = os.path.splitext(name)[1].lower()
+            types = {'.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg'}
+            if ext in types:
+                try:
+                    with open(os.path.join(BASE, 'lib', name), 'rb') as f:
+                        return self.send(200, f.read(), types[ext])
+                except OSError:
+                    return self.jerr(404, 'arquivo não encontrado')
         if not path.startswith('/api/'):
             return self.jerr(404, 'não encontrado')
         if not self.authorized():
