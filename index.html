@@ -82,7 +82,7 @@
   .adj select,.adj input{padding:5px 8px;font-size:12px}
   /* layout com abas laterais */
   .topbar{display:flex;align-items:center;gap:16px;background:#0b0b0c;border-bottom:3px solid var(--pri);padding:10px 22px;min-height:68px}
-  .logoimg{height:44px;width:auto;display:block}.logoimg[hidden],.wordmark[hidden]{display:none}
+  .logoimg{height:46px;width:auto;display:block;background:#fff;border-radius:8px;padding:6px 12px}.logoimg[hidden],.wordmark[hidden]{display:none}
   .wordmark{font-weight:800;font-size:22px;letter-spacing:.14em;color:#fff}
   .topbar .tt{border-left:1px solid var(--bd);padding-left:16px}.topbar h1{margin:0;font-size:18px;color:#fff}.topbar .sub{font-size:12px;color:var(--mut)}
   .layout{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 68px)}
@@ -129,9 +129,10 @@
   .kpi.click:hover{transform:translateY(-2px);border-color:var(--pri)}
   .kpi.on{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri)}
   .kpinote{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--pri);border-radius:12px;padding:10px 14px;margin-bottom:10px}
-  @media(max-width:900px){.side{padding:12px;gap:10px;border-right:0;border-bottom:1px solid var(--bd)}.topbar{padding:8px 14px;gap:10px}.logoimg{height:34px}.wordmark{font-size:17px}.topbar h1{font-size:15px}.side .legend,.who small{display:none}.side nav{display:grid;grid-template-columns:1fr 1fr}button.nav{padding:8px 10px;font-size:13px}.side .who{display:inline-block;width:calc(50% - 6px);vertical-align:top}.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
+  @media(max-width:900px){.side{padding:12px;gap:10px;border-right:0;border-bottom:1px solid var(--bd)}.topbar{padding:8px 14px;gap:10px}.logoimg{height:34px;padding:4px 8px}.wordmark{font-size:17px}.topbar h1{font-size:15px}.side .legend,.who small{display:none}.side nav{display:grid;grid-template-columns:1fr 1fr}button.nav{padding:8px 10px;font-size:13px}.side .who{display:inline-block;width:calc(50% - 6px);vertical-align:top}.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
   @media(max-width:760px){header{padding:20px 14px 60px}main{padding:0 12px 30px}.legend{margin-left:0}table{display:block;overflow-x:auto}}
 </style>
+<script>function logoFallback(img){ if(/\.svg$/.test(img.src)) img.src='lib/petrobras.png'; else { img.hidden=true; document.getElementById('logoTxt').hidden=false; } }</script>
 </head>
 <body>
 <div id="demoBar">🧪 MODO DEMONSTRAÇÃO — dados fictícios; nada é enviado ao servidor nem salvo. <button onclick="exitDemo()">✖ Sair do modo demo</button></div>
@@ -591,7 +592,7 @@ async function putAj(key,st,nota){
 }
 
 // ---------- logo: procura lib/petrobras.svg, depois .png; se não houver, mostra o nome em texto ----------
-function logoFallback(img){ if(/\.svg$/.test(img.src)) img.src='lib/petrobras.png'; else { img.hidden=true; document.getElementById('logoTxt').hidden=false; } }
+
 // ---------- abas laterais ----------
 function goTab(t){ document.querySelectorAll('.tab').forEach(e=>e.hidden=e.id!=='tab_'+t);
   document.querySelectorAll('button.nav').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
