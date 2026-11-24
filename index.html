@@ -5,16 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel de Ordens SAP</title>
 <style>
+  /* tema único: cinza puxado para o preto; destaque verde (troque --pri/--pri2 para mudar o destaque) */
   :root{
-    --bg:#f3f5fa;--card:#ffffff;--card2:#f8f9fd;--tx:#172036;--mut:#6a7490;--bd:#e3e7f1;
-    --ok:#12a150;--warn:#e08a00;--bad:#e5484d;--na:#8b93a8;--pri:#4f46e5;--pri2:#7c3aed;
-    --okbg:#e3f6ec;--warnbg:#fff1d9;--badbg:#fde8e9;--nabg:#eceef4;
-    --sh:0 1px 2px rgba(23,32,54,.05),0 8px 24px rgba(23,32,54,.06);
+    --bg:#121314;--card:#1b1c1e;--card2:#222326;--tx:#ececec;--mut:#9a9da3;--bd:#2d2e32;
+    --ok:#3ddc84;--warn:#fbbf24;--bad:#ff6b70;--na:#a3a7ae;--pri:#00a859;--pri2:#00884a;
+    --okbg:#10321f;--warnbg:#3a2a0a;--badbg:#3c1519;--nabg:#2a2b2f;
+    --sh:0 8px 24px rgba(0,0,0,.4);color-scheme:dark;
   }
-  @media (prefers-color-scheme:dark){:root{
-    --bg:#0e1220;--card:#171c2e;--card2:#1c2236;--tx:#e9ecf6;--mut:#98a2c0;--bd:#262d45;
-    --pri:#818cf8;--pri2:#a78bfa;--okbg:#10321f;--warnbg:#3a2a0a;--badbg:#3c1519;--nabg:#232a40;
-    --ok:#3ddc84;--warn:#fbbf24;--bad:#ff6b70;--na:#a3acc8;--sh:0 8px 24px rgba(0,0,0,.35);}}
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.45 Inter,system-ui,"Segoe UI",sans-serif;background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
   header{background:linear-gradient(120deg,#312e81 0%,#4f46e5 55%,#7c3aed 100%);color:#fff;padding:26px 24px 70px}
@@ -84,15 +81,19 @@
   .adj{display:grid;grid-template-columns:110px auto 150px minmax(180px,1fr) auto;gap:8px;align-items:center;margin:4px 0;font-size:12px}
   .adj select,.adj input{padding:5px 8px;font-size:12px}
   /* layout com abas laterais */
-  .layout{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-  .side{background:linear-gradient(180deg,#312e81 0%,#4338ca 60%,#6d28d9 100%);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
+  .topbar{display:flex;align-items:center;gap:16px;background:#0b0b0c;border-bottom:3px solid var(--pri);padding:10px 22px;min-height:68px}
+  .logoimg{height:46px;width:auto;display:block;background:#fff;border-radius:8px;padding:6px 12px}.logoimg[hidden],.wordmark[hidden]{display:none}
+  .wordmark{font-weight:800;font-size:22px;letter-spacing:.14em;color:#fff}
+  .topbar .tt{border-left:1px solid var(--bd);padding-left:16px}.topbar h1{margin:0;font-size:18px;color:#fff}.topbar .sub{font-size:12px;color:var(--mut)}
+  .layout{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 68px)}
+  .side{background:#0e0e0f;border-right:1px solid var(--bd);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
   .brand{display:flex;gap:10px;align-items:center}.brand h1{font-size:16px;line-height:1.2}.brand .sub{font-size:12px}
   .side .logo{width:40px;height:40px;font-size:20px;flex:none}
   .side nav{display:flex;flex-direction:column;gap:4px}
   button.nav{background:transparent;box-shadow:none;color:rgba(255,255,255,.82);text-align:left;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-weight:500}
   button.nav i{font-style:normal;width:22px;text-align:center}
   button.nav:hover{background:rgba(255,255,255,.12);filter:none}
-  button.nav.on{background:#fff;color:#312e81;font-weight:700}
+  button.nav.on{background:var(--card2);color:#fff;font-weight:700;box-shadow:inset 3px 0 0 var(--pri)}
   .who label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;opacity:.95}
   .who input{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
   .who input::placeholder{color:rgba(255,255,255,.55)}
@@ -105,7 +106,7 @@
   .drop.over,.drop:hover{background:color-mix(in srgb,var(--pri) 14%,transparent)}
   .drop>b{font-size:16px;display:block;margin-bottom:4px}.drop small{color:var(--mut)}
   .who select{width:100%;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
-  .who select option{color:#172036}
+  .who select option{color:#ececec;background:#1b1c1e}
   dialog{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:16px;padding:22px;width:min(440px,92vw);box-shadow:var(--sh)}
   dialog::backdrop{background:rgba(10,14,30,.5)}
   dialog h3{margin:0 0 6px}dialog p{margin:0 0 12px}dialog select,dialog input{width:100%;margin-bottom:8px}
@@ -128,15 +129,20 @@
   .kpi.click:hover{transform:translateY(-2px);border-color:var(--pri)}
   .kpi.on{border-color:var(--pri);box-shadow:0 0 0 2px var(--pri)}
   .kpinote{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--pri);border-radius:12px;padding:10px 14px;margin-bottom:10px}
-  @media(max-width:900px){.side{padding:12px;gap:10px}.side .legend,.who small{display:none}.side nav{display:grid;grid-template-columns:1fr 1fr}button.nav{padding:8px 10px;font-size:13px}.side .who{display:inline-block;width:calc(50% - 6px);vertical-align:top}.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
+  @media(max-width:900px){.side{padding:12px;gap:10px;border-right:0;border-bottom:1px solid var(--bd)}.topbar{padding:8px 14px;gap:10px}.logoimg{height:34px;padding:4px 8px}.wordmark{font-size:17px}.topbar h1{font-size:15px}.side .legend,.who small{display:none}.side nav{display:grid;grid-template-columns:1fr 1fr}button.nav{padding:8px 10px;font-size:13px}.side .who{display:inline-block;width:calc(50% - 6px);vertical-align:top}.layout{grid-template-columns:1fr}.side{position:static;height:auto}.side nav{flex-direction:row;flex-wrap:wrap}.side .legend{flex-direction:row;margin-top:0}.layout main{padding:16px 12px}}
   @media(max-width:760px){header{padding:20px 14px 60px}main{padding:0 12px 30px}.legend{margin-left:0}table{display:block;overflow-x:auto}}
 </style>
+<script>function logoFallback(img){ if(/\.svg$/.test(img.src)) img.src='lib/petrobras.png'; else { img.hidden=true; document.getElementById('logoTxt').hidden=false; } }</script>
 </head>
 <body>
 <div id="demoBar">🧪 MODO DEMONSTRAÇÃO — dados fictícios; nada é enviado ao servidor nem salvo. <button onclick="exitDemo()">✖ Sair do modo demo</button></div>
+<header class="topbar">
+  <img class="logoimg" id="logoImg" src="lib/petrobras.svg" alt="Petrobras" onerror="logoFallback(this)">
+  <span class="wordmark" id="logoTxt" hidden>PETROBRAS</span>
+  <div class="tt"><h1>Painel de Ordens SAP</h1><div class="sub">Nivelamento semanal</div></div>
+</header>
 <div class="layout">
 <aside class="side">
-  <div class="brand"><div class="logo">📋</div><div><h1>Painel de Ordens SAP</h1><div class="sub">Nivelamento semanal</div></div></div>
   <nav>
     <button class="nav on" data-tab="painel" onclick="goTab('painel')"><i>📊</i>Painel de ordens</button>
     <button class="nav" data-tab="planilhas" onclick="goTab('planilhas')"><i>📂</i>Planilhas</button>
@@ -585,6 +591,8 @@ async function putAj(key,st,nota){
   if(!DEMO) saveAj(); setTimeout(render,0);
 }
 
+// ---------- logo: procura lib/petrobras.svg, depois .png; se não houver, mostra o nome em texto ----------
+
 // ---------- abas laterais ----------
 function goTab(t){ document.querySelectorAll('.tab').forEach(e=>e.hidden=e.id!=='tab_'+t);
   document.querySelectorAll('button.nav').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
@@ -732,6 +740,7 @@ function exportXlsx(){
   XLSX.writeFile(wb,'resumo_ordens.xlsx');
 }
 
+{ const li=document.getElementById('logoImg'); if(li.complete&&!li.naturalWidth) logoFallback(li); }   // o erro de carga pode ter ocorrido antes do script
 try{ const t=localStorage.getItem('tab'); if(t&&document.getElementById('tab_'+t)) goTab(t); }catch(e){}
 try{ fWho.value=localStorage.getItem('who')||''; }catch(e){}
 buildSlots(); render(); setStatus(false); fillWeekSel(); renderBase();
