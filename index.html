@@ -117,6 +117,11 @@
   .dbt button{padding:4px 10px;font-size:12px;margin-right:4px}
   button.danger{background:transparent;color:var(--bad);border:1px solid var(--bad);box-shadow:none}
   details.cols{margin-top:8px}details.cols>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--pri)}
+  .guide .body{padding-top:14px}.guide ol,.guide ul{margin:6px 0 10px;padding-left:22px}.guide li{margin:5px 0}
+  .guide code,.guide kbd{background:var(--card2);border:1px solid var(--bd);border-radius:6px;padding:1px 6px;font-size:12px}
+  .guide .tip{background:var(--card2);border-left:4px solid var(--pri);border-radius:10px;padding:10px 14px;margin:10px 0}
+  .guide .warn{border-left-color:var(--warn)}.guide table{box-shadow:none;margin:8px 0}
+  .guide details.card>summary{font-size:15px}
   .upl{margin:10px 0 0;padding:0;list-style:none;font-size:13px}.upl li{padding:3px 0}
   .layout main{overflow:hidden}
   #tableWrap{overflow-x:auto;border-radius:16px;padding-bottom:4px}
@@ -147,6 +152,7 @@
     <button class="nav on" data-tab="painel" onclick="goTab('painel')"><i>📊</i>Painel de ordens</button>
     <button class="nav" data-tab="planilhas" onclick="goTab('planilhas')"><i>📂</i>Planilhas</button>
     <button class="nav" data-tab="base" onclick="goTab('base')"><i>🗄️</i>Base de dados</button>
+    <button class="nav" data-tab="guia" onclick="goTab('guia')"><i>📖</i>Guia SAP</button>
     <button class="nav" data-tab="regras" onclick="goTab('regras')"><i>⚙️</i>Regras de análise</button>
     <button class="nav" data-tab="entregas" onclick="goTab('entregas')"><i>📦</i>Entregas e backup</button>
   </nav>
@@ -196,6 +202,79 @@
     <p class="mut" style="margin:0 0 12px" id="baseNote">Todas as planilhas enviadas ficam guardadas aqui, organizadas por semana. Para cada semana, vale a planilha mais recente de cada tipo. Você pode abrir uma semana, corrigir a semana de uma planilha ou excluir.</p>
     <div id="baseWrap"></div>
   </div></div>
+</section>
+<section class="tab guide" id="tab_guia" hidden>
+  <h2>Guia SAP — como filtrar e extrair as ordens</h2>
+  <div class="card"><div class="body">
+    <p style="margin:0 0 8px">O painel usa <b>3 planilhas</b>. A das ordens niveladas (GPI) vem do nivelamento; as outras duas saem do SAP e devem trazer <b>só as ordens do GPI</b> da semana:</p>
+    <table><tr><th>Planilha no painel</th><th>Transação SAP</th><th>O que traz</th></tr>
+      <tr><td>★ Ordens niveladas (GPI)</td><td>— (planilha do nivelamento)</td><td>Lista de ordens, semana, disciplina, risco nível 2</td></tr>
+      <tr><td>Operações</td><td><code>IW37N</code> (ou <code>IW49N</code>)</td><td>Uma linha por operação: texto, centro de trabalho, status</td></tr>
+      <tr><td>Materiais</td><td><code>MB25</code></td><td>Reservas por ordem: quantidade necessária e retirada</td></tr></table>
+    <div class="tip warn">As telas do SAP variam conforme a versão do SAP GUI, o idioma e o layout da sua empresa. Os nomes abaixo são os padrões; se algo estiver com outro nome ou lugar, siga a ideia do passo e, se precisar, me mande um print para eu adaptar o guia.</div>
+  </div></div>
+
+  <details class="card" open><summary><span class="step">0</span>Preparar a lista de ordens (a partir do GPI)</summary><div class="body">
+    <ol>
+      <li>Abra a planilha das ordens niveladas da semana no Excel.</li>
+      <li>Selecione a <b>coluna Ordem</b> (só os números, sem o cabeçalho) e copie com <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+      <li>Deixe copiado: você vai colar essa lista no campo <b>Ordem</b> das transações abaixo. Assim o SAP traz só as ordens da semana.</li>
+    </ol>
+    <div class="tip">Dica: no painel, a aba <b>Painel de ordens</b> tem a caixa "Minha relação de ordens". Ela filtra o painel do mesmo jeito, caso o SAP traga ordens a mais.</div>
+  </div></details>
+
+  <details class="card" open><summary><span class="step">1</span>IW37N — operações das ordens (planilha “Operações”)</summary><div class="body">
+    <ol>
+      <li>No SAP, digite <code>IW37N</code> na barra de comandos e tecle <kbd>Enter</kbd>.</li>
+      <li>Na tela de seleção, se houver uma <b>variante</b> salva (botão “Variante” / <kbd>Ctrl</kbd>+<kbd>F8</kbd>), carregue-a. Se não, siga os passos.</li>
+      <li>No campo <b>Ordem</b>, clique no ícone de <b>seleção múltipla</b> (seta ao lado do campo).</li>
+      <li>Na janela de seleção múltipla, apague o que houver e clique em <b>Colar da área de transferência</b> (ícone da prancheta, ou <kbd>Shift</kbd>+<kbd>F12</kbd>). A lista copiada no passo 0 entra nas linhas. Confirme com <b>Copiar</b> (<kbd>F8</kbd>).</li>
+      <li>Limpe filtros que atrapalhem, como <b>Data de início</b>, <b>Status do sistema</b> e <b>Centro de trabalho</b>, para não esconder ordens do GPI. Se a seleção tiver o campo “Perfil de seleção/Status”, deixe sem restrição.</li>
+      <li>Marque para listar no nível de <b>Operações</b> (e não só de ordens). Opcional: marque também <b>Componentes</b> se quiser as reservas na mesma lista.</li>
+      <li>Execute com <kbd>F8</kbd>.</li>
+      <li>Na lista, abra <b>Layout → Selecionar / Alterar layout</b> e deixe visíveis as colunas: <b>Ordem, Operação, Texto breve da operação, Centro de trabalho, Status do sistema</b> (e, se houver, Texto da ordem). Salve o layout para reaproveitar.</li>
+      <li>Exporte: <b>Lista → Exportar → Planilha</b> (ou o ícone de planilha na barra) e escolha <b>Excel (.xlsx)</b>. Salve com a semana no nome, por exemplo <code>operacoes_sem48.xlsx</code>.</li>
+    </ol>
+    <div class="tip"><b>IW49N</b> serve do mesmo jeito (mesmos passos), se na sua empresa a lista de operações sair por ela. Use só uma das duas por semana.</div>
+  </div></details>
+
+  <details class="card" open><summary><span class="step">2</span>MB25 — reservas e materiais (planilha “Materiais”)</summary><div class="body">
+    <ol>
+      <li>Digite <code>MB25</code> na barra de comandos e tecle <kbd>Enter</kbd>.</li>
+      <li>Preencha o <b>Centro</b> (da sua unidade) se o SAP pedir.</li>
+      <li>No campo <b>Ordem</b>, use a <b>seleção múltipla</b> e <b>cole da área de transferência</b>, igual ao passo 1 (itens 3 e 4).</li>
+      <li>Deixe em branco <b>Material</b>, <b>Data da necessidade</b> e <b>Reserva</b>, para trazer todas as reservas das ordens.</li>
+      <li>Nas opções de seleção, não marque só “pendentes/abertas”: o painel precisa ver também o que já foi <b>retirado</b> (para marcar “baixado”).</li>
+      <li>Execute com <kbd>F8</kbd>.</li>
+      <li>Ajuste o layout para mostrar: <b>Ordem, Material, Descrição do material, Quantidade necessária, Quantidade retirada</b>.</li>
+      <li>Exporte para Excel (.xlsx) e salve com a semana, por exemplo <code>materiais_sem48.xlsx</code>.</li>
+    </ol>
+  </div></details>
+
+  <details class="card" open><summary><span class="step">3</span>Enviar para o painel</summary><div class="body">
+    <ol>
+      <li>Abra a aba <b>Planilhas</b> e arraste os arquivos (GPI, operações, materiais) de uma vez.</li>
+      <li>O painel identifica o tipo de cada um e a <b>semana</b>. Ter <code>sem48</code> no nome do arquivo ajuda; se ele tiver dúvida, pergunta.</li>
+      <li>Confira em <b>Planilhas da semana ativa</b> se as colunas foram reconhecidas (“N de M reconhecidas”). Se faltar alguma, abra <b>Ajustar colunas</b>.</li>
+    </ol>
+  </div></details>
+
+  <details class="card"><summary><span class="step">?</span>Colunas que o painel usa</summary><div class="body">
+    <table><tr><th>Planilha</th><th>Obrigatória</th><th>Usadas na análise</th></tr>
+      <tr><td>GPI</td><td>Ordem</td><td>Semana, Descrição, Disciplina, Tarefa, <b>Risco nível 2</b></td></tr>
+      <tr><td>Operações</td><td>Ordem</td><td>Operação, Texto da operação (acha o andaime), Centro de trabalho (acha o apoio), Status do sistema</td></tr>
+      <tr><td>Materiais</td><td>Ordem</td><td>Material, Descrição, Qtd necessária, Qtd retirada (ou uma coluna de status, em planilha de controle interna)</td></tr></table>
+  </div></details>
+
+  <details class="card"><summary><span class="step">?</span>Problemas comuns</summary><div class="body">
+    <ul>
+      <li><b>Faltam ordens na lista do SAP:</b> há filtro de data, status ou centro de trabalho ainda preenchido. Limpe e execute de novo.</li>
+      <li><b>Muitas ordens para colar:</b> se o SAP recusar uma lista muito grande, faça duas ou três exportações e <b>junte tudo em uma única planilha no Excel</b> antes de enviar. O painel usa só a planilha mais recente de cada tipo em cada semana, então partes separadas não se somam.</li>
+      <li><b>Zeros à esquerda ou número diferente:</b> o painel ignora zeros à esquerda na ordem; não precisa corrigir.</li>
+      <li><b>Acentos errados em CSV/TXT:</b> o painel lê Windows-1252 e UTF-8. Prefira exportar em <b>.xlsx</b>.</li>
+      <li><b>Material “pendente” mas já foi retirado:</b> confira se a coluna <b>Quantidade retirada</b> está no layout exportado.</li>
+    </ul>
+  </div></details>
 </section>
 <section class="tab" id="tab_regras" hidden>
   <h2>Regras de análise</h2>
